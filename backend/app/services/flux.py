@@ -103,8 +103,10 @@ def soumettre(connection, facture: FactureIn, acteur: str) -> tuple[int, dict, d
     anomalies = controler(connection, facture, ordonnance, lignes_ordonnance)
     debut = time.perf_counter()
     try:
-        variables = None if version == VERSION_SIMULEE else _variables(
-            connection, facture, ordonnance, lignes_ordonnance
+        variables = (
+            None
+            if version == VERSION_SIMULEE
+            else _variables(connection, facture, ordonnance, lignes_ordonnance)
         )
         prediction = predict(
             facture.facture_id,
