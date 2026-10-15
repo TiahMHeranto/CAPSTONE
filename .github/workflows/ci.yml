@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements-dev.txt
+      - run: ruff check backend migrations
+      - run: ruff format --check backend migrations
+      - run: pytest
+      - run: pip-audit -r backend/requirements.txt
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f backend/Dockerfile .
+      - run: cp .env.example .env
+      - run: docker compose config > /dev/null
+      - run: docker compose up -d db
+      - run: timeout 180 sh -c 'until docker compose exec -T db pg_isready -U prediccare -d prediccare; do sleep 2; done'

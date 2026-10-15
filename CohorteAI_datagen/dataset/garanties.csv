@@ -1,0 +1,28 @@
+formule,categorie,taux_remboursement,plafond_annuel_categorie,franchise_par_facture,delai_carence_jours,plafond_annuel_global,prime_annuelle_par_beneficiaire,attestation_requise,actes_exclus,pieces_justificatives
+ESSENTIEL,CONSULTATION,80,600000,0,0,3000000,420000,0,DENT-PROTH|DENT-ORTHO|IMG-IRM,Facture ou feuille de soins du praticien ; attestation de prise en charge pour certaines consultations spécialisées signalées dans le guide du réseau.
+ESSENTIEL,PHARMACIE,80,900000,0,0,3000000,420000,0,DENT-PROTH|DENT-ORTHO|IMG-IRM,"Ordonnance avec nom du prescripteur, numéro d'ordre (ONM) et cachet ; validité 10 jours ; délivrance ponctuelle des médicaments."
+ESSENTIEL,LABORATOIRE,80,400000,0,0,3000000,420000,1,DENT-PROTH|DENT-ORTHO|IMG-IRM,Ordonnance avec renseignement clinique + attestation de prise en charge OBLIGATOIRE ; validité de l'ordonnance 10 jours.
+ESSENTIEL,IMAGERIE,80,500000,0,30,3000000,420000,1,DENT-PROTH|DENT-ORTHO|IMG-IRM,Ordonnance avec renseignement clinique + attestation de prise en charge OBLIGATOIRE ; entente préalable pour scanner et IRM ; validité 10 jours.
+ESSENTIEL,HOSPITALISATION,90,1500000,20000,30,3000000,420000,1,DENT-PROTH|DENT-ORTHO|IMG-IRM,Billet d'hospitalisation + facture proforma + attestation de prise en charge OBLIGATOIRE ; entente préalable pour toute intervention chirurgicale.
+ESSENTIEL,MATERNITE,90,1200000,0,270,3000000,420000,1,DENT-PROTH|DENT-ORTHO|IMG-IRM,Billet d'accouchement + proforma + attestation de prise en charge OBLIGATOIRE ; entente préalable pour césarienne programmée.
+ESSENTIEL,DENTAIRE,70,250000,0,90,3000000,420000,1,DENT-PROTH|DENT-ORTHO|IMG-IRM,Devis + attestation de prise en charge OBLIGATOIRE + entente préalable si prothèse ou orthodontie.
+ESSENTIEL,OPTIQUE,70,150000,0,180,3000000,420000,1,DENT-PROTH|DENT-ORTHO|IMG-IRM,Ordonnance (validité 1 mois) + proforma + attestation de prise en charge OBLIGATOIRE.
+ESSENTIEL,KINESITHERAPIE,70,200000,0,30,3000000,420000,1,DENT-PROTH|DENT-ORTHO|IMG-IRM,Ordonnance avec renseignement clinique + attestation de prise en charge ; validité 10 jours.
+CONFORT,CONSULTATION,90,1200000,0,0,8000000,980000,0,DENT-ORTHO,Facture ou feuille de soins du praticien ; attestation de prise en charge pour certaines consultations spécialisées signalées dans le guide du réseau.
+CONFORT,PHARMACIE,90,2000000,0,0,8000000,980000,0,DENT-ORTHO,"Ordonnance avec nom du prescripteur, numéro d'ordre (ONM) et cachet ; validité 10 jours ; délivrance ponctuelle des médicaments."
+CONFORT,LABORATOIRE,90,1000000,0,0,8000000,980000,1,DENT-ORTHO,Ordonnance avec renseignement clinique + attestation de prise en charge OBLIGATOIRE ; validité de l'ordonnance 10 jours.
+CONFORT,IMAGERIE,90,2000000,0,30,8000000,980000,1,DENT-ORTHO,Ordonnance avec renseignement clinique + attestation de prise en charge OBLIGATOIRE ; entente préalable pour scanner et IRM ; validité 10 jours.
+CONFORT,HOSPITALISATION,90,5000000,10000,30,8000000,980000,1,DENT-ORTHO,Billet d'hospitalisation + facture proforma + attestation de prise en charge OBLIGATOIRE ; entente préalable pour toute intervention chirurgicale.
+CONFORT,MATERNITE,100,3000000,0,180,8000000,980000,1,DENT-ORTHO,Billet d'accouchement + proforma + attestation de prise en charge OBLIGATOIRE ; entente préalable pour césarienne programmée.
+CONFORT,DENTAIRE,80,800000,0,60,8000000,980000,1,DENT-ORTHO,Devis + attestation de prise en charge OBLIGATOIRE + entente préalable si prothèse ou orthodontie.
+CONFORT,OPTIQUE,80,400000,0,90,8000000,980000,1,DENT-ORTHO,Ordonnance (validité 1 mois) + proforma + attestation de prise en charge OBLIGATOIRE.
+CONFORT,KINESITHERAPIE,80,600000,0,0,8000000,980000,1,DENT-ORTHO,Ordonnance avec renseignement clinique + attestation de prise en charge ; validité 10 jours.
+PREMIUM,CONSULTATION,100,3000000,0,0,20000000,2100000,0,,Facture ou feuille de soins du praticien ; attestation de prise en charge pour certaines consultations spécialisées signalées dans le guide du réseau.
+PREMIUM,PHARMACIE,100,5000000,0,0,20000000,2100000,0,,"Ordonnance avec nom du prescripteur, numéro d'ordre (ONM) et cachet ; validité 10 jours ; délivrance ponctuelle des médicaments."
+PREMIUM,LABORATOIRE,100,3000000,0,0,20000000,2100000,1,,Ordonnance avec renseignement clinique + attestation de prise en charge OBLIGATOIRE ; validité de l'ordonnance 10 jours.
+PREMIUM,IMAGERIE,100,6000000,0,0,20000000,2100000,1,,Ordonnance avec renseignement clinique + attestation de prise en charge OBLIGATOIRE ; entente préalable pour scanner et IRM ; validité 10 jours.
+PREMIUM,HOSPITALISATION,100,15000000,0,0,20000000,2100000,1,,Billet d'hospitalisation + facture proforma + attestation de prise en charge OBLIGATOIRE ; entente préalable pour toute intervention chirurgicale.
+PREMIUM,MATERNITE,100,5000000,0,90,20000000,2100000,1,,Billet d'accouchement + proforma + attestation de prise en charge OBLIGATOIRE ; entente préalable pour césarienne programmée.
+PREMIUM,DENTAIRE,90,2000000,0,30,20000000,2100000,1,,Devis + attestation de prise en charge OBLIGATOIRE + entente préalable si prothèse ou orthodontie.
+PREMIUM,OPTIQUE,90,800000,0,60,20000000,2100000,1,,Ordonnance (validité 1 mois) + proforma + attestation de prise en charge OBLIGATOIRE.
+PREMIUM,KINESITHERAPIE,100,1500000,0,0,20000000,2100000,1,,Ordonnance avec renseignement clinique + attestation de prise en charge ; validité 10 jours.

@@ -1,0 +1,111 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./db/backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m app.db.bootstrap
+    environment:
+      MIGRATE_DATABASE_URL: ${MIGRATE_DATABASE_URL}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      AGENT_DB_USER: ${AGENT_DB_USER}
+      AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD}
+      BI_DB_USER: ${BI_DB_USER:-prediccare_bi}
+      BI_DB_PASSWORD: ${BI_DB_PASSWORD:-change-me-bi}
+      ALERT_THRESHOLD: ${ALERT_THRESHOLD}
+      DRIFT_PSI_THRESHOLD: ${DRIFT_PSI_THRESHOLD:-0.25}
+      DATASET_DIR: ${DATASET_DIR}
+      LABELS_DIR: ${LABELS_DIR}
+      MODELS_DIR: /app/models
+      LOG_LEVEL: ${LOG_LEVEL}
+      PSEUDO_HMAC_KEY: ${PSEUDO_HMAC_KEY:-change-me-pseudo}
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-change-me-pii}
+      AGE_REFERENCE_YEAR: ${AGE_REFERENCE_YEAR:-2026}
+      RETENTION_IDENTITES_YEARS: ${RETENTION_IDENTITES_YEARS:-5}
+      AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-change-me-demo}
+      AUTH_ASSURE_ID: ${AUTH_ASSURE_ID:-}
+    volumes:
+      - ./CohorteAI_datagen/dataset:/data/dataset:ro
+      - ./CohorteAI_datagen/labels:/data/labels:ro
+      - ./models:/app/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      MODELS_DIR: /app/models
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-change-me-pii}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:-change-me-auth}
+      RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-20}
+      RATE_LIMIT_ADMIN: ${RATE_LIMIT_ADMIN:-10}
+      RATE_LIMIT_WINDOW_S: ${RATE_LIMIT_WINDOW_S:-60}
+    volumes:
+      - ./models:/app/models:ro
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:1.114.0
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      GENERIC_TIMEZONE: Indian/Antananarivo
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8000}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      EMAIL_WEBHOOK_URL: ${EMAIL_WEBHOOK_URL:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n:/import:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  n8n_data:

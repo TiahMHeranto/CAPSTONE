@@ -1,0 +1,97 @@
+predicare-tpa/
+├── README.md                  # architecture, démarrage en 1 commande, liens vers docs/
+├── docker-compose.yml         # toute la plateforme : db, api, frontend, n8n, bi, ...
+├── docker-compose.override.yml# surcharges de dev (hot reload, ports debug)
+├── .env.example               # toutes les variables, sans secrets (le .env est ignoré par Git)
+├── .gitignore
+├── Makefile                   # raccourcis : make up, test, lint, backup, restore, migrate
+├── pyproject.toml             # config lint/format (ruff, black), pytest
+│
+├── .github/
+│   ├── workflows/ci.yml       # lint + pytest + build Docker à chaque push
+│   ├── pull_request_template.md
+│   └── CODEOWNERS             # M1/M2/M3 relisent leurs dossiers
+│
+├── backend/                   # M2 : API FastAPI
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── app/
+│   │   ├── main.py            # point d'entrée, /health
+│   │   ├── config.py          # lecture .env + seuils en base
+│   │   ├── api/               # routes : invoices, predictions, decisions, admin, chat, metrics
+│   │   ├── core/              # auth JWT, rôles, sécurité, logging
+│   │   ├── schemas/           # modèles Pydantic (contrat d'API)
+│   │   ├── services/          # logique : pipeline facture, notifications, audit
+│   │   ├── db/                # sessions, modèles SQLAlchemy
+│   │   └── monitoring/        # métriques, dérive
+│   └── tests/                 # unit, integration, roles
+│
+├── migrations/                # M2 : Alembic, schéma versionné + pgvector
+│   └── versions/
+│
+├── db/
+│   ├── init/                  # extension pgvector, rôles (dont lecture seule pour l'agent)
+│   ├── seed/                  # chargement auto des données au 1er démarrage
+│   └── backup/                # backup.sh, restore.sh, cron
+│
+├── ml/                        # M1 : tout le machine learning
+│   ├── data/                  # raw/ et clean/ (ignorés par Git, voir DVC ou README)
+│   ├── notebooks/             # exploration uniquement, jamais en production
+│   ├── src/
+│   │   ├── cleaning/          # nettoyage et validation (partagé avec l'API)
+│   │   ├── pseudonymization/  # HMAC, généralisation
+│   │   ├── features/          # variables fraude + prescriptions
+│   │   ├── training/          # entraînement, SMOTE, seuil, Optuna
+│   │   ├── explain/           # SHAP et rapport d'explicabilité
+│   │   ├── fairness/          # audit d'équité par sous-groupe
+│   │   ├── drift/             # PSI / KS
+│   │   └── inference.py       # fonction de prédiction unique appelée par l'API
+│   ├── models/                # registre : v1/, v2/ (artefact + metadata + model card)
+│   ├── tests/
+│   └── requirements.txt
+│
+├── rag/                       # M3 : assistant documentaire
+│   ├── Dockerfile
+│   ├── ingestion/             # extraction PDF, découpage, embeddings, indexation
+│   ├── agent/                 # agent ReAct, outils SQL paramétrés (lecture seule)
+│   ├── security/              # anti-injection, filtres entrée/sortie
+│   ├── cache/                 # semantic caching
+│   ├── corpus/                # PDF de contrats (fournis)
+│   ├── eval/                  # jeu de questions + jeu d'attaques
+│   └── tests/
+│
+├── frontend/                  # M3 : interface web unique, 4 rôles
+│   ├── Dockerfile
+│   ├── package.json
+│   └── src/
+│       ├── pages/             # health-professional/, insured/, manager/, admin/
+│       ├── components/
+│       ├── api/               # client de l'API
+│       └── auth/              # connexion, garde par rôle
+│
+├── bi/                        # M3 : tableau de bord
+│   ├── dashboards/            # export du dashboard (JSON/YAML)
+│   └── sql/                   # vues SQL des KPIs
+│
+├── n8n/                       # M2 : workflows
+│   ├── workflows/             # alert_fraud.json (importable)
+│   └── README.md              # import, identifiants Slack/Email
+│
+├── infra/                     # reverse proxy, config monitoring (Prometheus/Grafana si retenu)
+│
+├── scripts/                   # utilitaires : générer un lot de test, scan PII, démo
+│
+├── tests/
+│   ├── e2e/                   # facture → score → SHAP → alerte → décision
+│   └── fixtures/              # lot de factures valides, invalides, inédites
+│
+└── docs/                      # tous les documents de gouvernance (voir plan)
+    ├── 00-gestion-projet/     # charte, ADR/, registre des risques, journal de contributions
+    ├── 01-donnees/            # datasheet, dictionnaire, rapport qualité
+    ├── 02-conformite/         # registre RGPD, AIPD, grille EU AI Act, rapport d'équité
+    ├── 03-modeles/            # model cards, rapport d'évaluation, fiches de version
+    ├── 04-securite/           # modèle de menaces, spécification de sécurité
+    ├── 05-api/                # OpenAPI, contrat de données, matrice des rôles
+    ├── 06-finops/             # tableur TCO/ROI, note d'hypothèses
+    ├── 07-guides/             # guide utilisateur, guide d'exploitation, runbook
+    └── 08-soutenance/         # slides, scénarios de démonstration

@@ -1,0 +1,16 @@
+# Remplacer les commentaires par les identifiants GitHub de l'équipe.
+
+# M2 — backend, base, exploitation
+# /backend/ @membre2
+# /migrations/ @membre2
+# /db/ @membre2
+# /n8n/ @membre2
+# /infra/ @membre2
+# /frontend/ @membre2
+
+# M1 — modèle
+# /ml/ @membre1
+
+# M3 — RAG, interface, BI
+# /rag/ @membre3
+# /bi/ @membre3

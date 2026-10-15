@@ -1,0 +1,46 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    database_url: str = (
+        "postgresql+psycopg://prediccare_app:change-me-app@localhost:5432/prediccare"
+    )
+    migrate_database_url: str = (
+        "postgresql+psycopg://prediccare:change-me@localhost:5432/prediccare"
+    )
+    app_db_user: str = "prediccare_app"
+    app_db_password: str = "change-me-app"
+    agent_db_user: str = "prediccare_agent"
+    agent_db_password: str = "change-me-agent"
+    bi_db_user: str = "prediccare_bi"
+    bi_db_password: str = "change-me-bi"
+    alert_threshold: float = 0.8
+    drift_psi_threshold: float = 0.25
+    pseudo_hmac_key: str = "change-me-pseudo"
+    pii_encryption_key: str = "change-me-pii"
+    admin_api_key: str = "change-me-admin"
+    auth_token_secret: str = "change-me-auth"
+    auth_demo_password: str = "change-me-demo"
+    auth_assure_id: str = ""
+    age_reference_year: int = 2026
+    retention_identites_years: int = 5
+    log_level: str = "INFO"
+    rate_limit_login: int = 20
+    rate_limit_admin: int = 10
+    rate_limit_window_s: int = 60
+    dataset_dir: str = "CohorteAI_datagen/dataset"
+    labels_dir: str = "CohorteAI_datagen/labels"
+    models_dir: str = "models"
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def psycopg_database_url(self) -> str:
+        return self.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+    @property
+    def psycopg_migrate_url(self) -> str:
+        return self.migrate_database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+
+settings = Settings()

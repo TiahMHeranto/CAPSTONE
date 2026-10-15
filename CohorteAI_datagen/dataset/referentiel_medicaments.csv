@@ -1,0 +1,29 @@
+code_medicament,libelle,prix_reference,remboursable,classe,chronique
+MED-PARA500,"Paracétamol 500 mg, boîte de 16 cp",2000,1,ANTALGIQUE,0
+MED-IBU400,"Ibuprofène 400 mg, boîte de 20 cp",3500,1,AINS,0
+MED-DICLO,"Diclofénac gel 1 %, tube 50 g",4000,1,AINS,0
+MED-AMOX500,"Amoxicilline 500 mg, boîte de 12 gél.",6000,1,ANTIBIOTIQUE,0
+MED-AMOXCLAV,"Amoxicilline + ac. clavulanique 1 g, boîte de 8",18000,1,ANTIBIOTIQUE,0
+MED-AZITH,"Azithromycine 500 mg, boîte de 3",12000,1,ANTIBIOTIQUE,0
+MED-CIPRO,"Ciprofloxacine 500 mg, boîte de 10",9000,1,ANTIBIOTIQUE,0
+MED-COTRIM,"Cotrimoxazole 480 mg, boîte de 20",3000,1,ANTIBIOTIQUE,0
+MED-METRO,"Métronidazole 250 mg, boîte de 20",3500,1,ANTIINFECTIEUX,0
+MED-ACT,"Artéméther + Luméfantrine (ACT), boîte de 24",8000,1,ANTIPALUDEEN,0
+MED-QUIN,"Quinine 300 mg, boîte de 20",7000,1,ANTIPALUDEEN,0
+MED-SRO,"Sels de réhydratation orale, sachet",500,1,REHYDRATATION,0
+MED-OMEP,"Oméprazole 20 mg, boîte de 14",6000,1,GASTRO,0
+MED-LORA,"Loratadine 10 mg, boîte de 10",5000,1,ANTIHISTAMINIQUE,0
+MED-PRED,"Prednisolone 20 mg, boîte de 20",6000,1,CORTICOIDE,0
+MED-SALBU,Salbutamol inhalateur 100 µg,15000,1,RESPIRATOIRE,1
+MED-METF,"Metformine 850 mg, boîte de 30",5000,1,ANTIDIABETIQUE,1
+MED-GLIB,"Glibenclamide 5 mg, boîte de 30",4000,1,ANTIDIABETIQUE,1
+MED-INSUL,"Insuline humaine, flacon 10 ml",45000,1,ANTIDIABETIQUE,1
+MED-AMLO,"Amlodipine 5 mg, boîte de 30",7000,1,ANTIHYPERTENSEUR,1
+MED-LOSAR,"Losartan 50 mg, boîte de 28",12000,1,ANTIHYPERTENSEUR,1
+MED-HCTZ,"Hydrochlorothiazide 25 mg, boîte de 30",4500,1,ANTIHYPERTENSEUR,1
+MED-ATORVA,"Atorvastatine 20 mg, boîte de 30",15000,1,HYPOLIPEMIANT,1
+MED-FERFOL,"Fer + acide folique, boîte de 30",4000,1,SUPPLEMENTATION,0
+MED-VITC,"Vitamine C 500 mg, boîte de 20",3000,1,VITAMINE,0
+MED-FORTIF,"Fortifiant multivitaminé, flacon 200 ml",25000,0,FORTIFIANT,0
+MED-COSMET,Crème dermo-cosmétique anti-âge 50 ml,45000,0,COSMETIQUE,0
+MED-COMPL,"Complément alimentaire minceur, boîte de 60",38000,0,COMPLEMENT,0
