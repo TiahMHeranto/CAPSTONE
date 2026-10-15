@@ -16,6 +16,7 @@ from app.services.flux import (
     mesures,
     modifier_reglages,
 )
+from app.services.prescriptions import tableau as tableau_prescriptions
 from app.services.supervision import relever_derive
 from app.services.supervision import tableau as tableau_supervision
 
@@ -52,6 +53,14 @@ def write_alert_journal(
         payload.score,
         payload.message,
     )
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.get("/alerts/prescriptions")
+def read_prescription_alerts(
+    _principal: Annotated[Principal, Depends(exiger("gestionnaire", "administrateur"))],
+) -> JSONResponse:
+    status, body = tableau_prescriptions()
     return JSONResponse(status_code=status, content=body)
 
 

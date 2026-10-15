@@ -19,6 +19,7 @@
 | `GET /invoices/{id}` | ses dépôts | les siens | oui | oui |
 | `GET /predictions/{id}` | | | oui | oui |
 | `GET /alerts` | | | oui | oui |
+| `GET /alerts/prescriptions` | | | oui | oui |
 | `POST /alerts/journal` | | | | oui |
 | `GET /alerts/journal` | | | oui | oui |
 | `POST /invoices/{id}/decisions` | | | oui | |

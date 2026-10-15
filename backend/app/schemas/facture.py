@@ -23,6 +23,7 @@ class FactureIn(BaseModel):
     prestataire_id: str | None = None
     assure_id: str | None = None
     contrat_id: str | None = None
+    ordonnance_id: str | None = None
     canal_reception: str | None = None
     mode_reglement: str | None = None
     lignes: list[LigneFactureIn] = Field(default_factory=list)

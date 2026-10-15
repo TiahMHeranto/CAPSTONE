@@ -27,7 +27,8 @@ def lire(connection) -> dict:
     volumes = connection.execute(
         """
         SELECT nb_factures, nb_predictions, nb_alertes_modele, nb_normales,
-               nb_notifications, nb_decisions, nb_rejets
+               nb_notifications, nb_decisions, nb_rejets,
+               montant_economise, taux_detection
         FROM bi.volumes
         """
     ).fetchone()
@@ -64,6 +65,8 @@ def lire(connection) -> dict:
             "nb_notifications": int(volumes[4]),
             "nb_decisions": int(volumes[5]),
             "nb_rejets": int(volumes[6]),
+            "montant_economise": int(volumes[7]),
+            "taux_detection": float(volumes[8]),
         },
         "alertes_par_statut": [
             {

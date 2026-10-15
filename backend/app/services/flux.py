@@ -13,6 +13,9 @@ from app.services.features import construire_variables
 from app.services.inference import enregistrer, predict
 from app.services.metrics import calculer
 from app.services.notify import notifier
+from app.services.prescriptions import charger, controler
+from app.services.prescriptions import enregistrer as noter_ordonnance
+from app.services.prescriptions import lister as lire_anomalies
 from app.services.referentiel import lire_codes
 from app.services.registry import VERSION_SIMULEE, ModeleIndisponible
 from app.services.reglages import appliquer, lire, normaliser, vue
@@ -96,9 +99,13 @@ def soumettre(connection, facture: FactureIn, acteur: str) -> tuple[int, dict, d
     except (LookupError, ValueError):
         logger.warning("reglage illisible")
         return 503, {"code": "REGLAGE_ABSENT", "motif": "configuration incomplete"}, None
+    ordonnance, lignes_ordonnance = charger(connection, _option(facture.ordonnance_id))
+    anomalies = controler(connection, facture, ordonnance, lignes_ordonnance)
     debut = time.perf_counter()
     try:
-        variables = None if version == VERSION_SIMULEE else _variables(connection, facture)
+        variables = None if version == VERSION_SIMULEE else _variables(
+            connection, facture, ordonnance, lignes_ordonnance
+        )
         prediction = predict(
             facture.facture_id,
             seuil,
@@ -116,6 +123,7 @@ def soumettre(connection, facture: FactureIn, acteur: str) -> tuple[int, dict, d
     duree_ms = int((time.perf_counter() - debut) * 1000)
     _inserer_facture(connection, facture, acteur)
     enregistrer(connection, prediction, duree_ms)
+    noter_ordonnance(connection, facture.facture_id, anomalies)
     logger.info(
         "facture scoree facture=%s classe=%s version=%s",
         facture.facture_id,
@@ -127,6 +135,7 @@ def soumettre(connection, facture: FactureIn, acteur: str) -> tuple[int, dict, d
         "valide": True,
         "rejets": [],
         "prediction": prediction.model_dump(),
+        "anomalies_prescription": [item.model_dump() for item in anomalies],
         "notifie": False,
     }
     alerte = None
@@ -140,6 +149,7 @@ def soumettre(connection, facture: FactureIn, acteur: str) -> tuple[int, dict, d
                 "classe": prediction.classe,
                 "model_version": prediction.model_version,
                 "explications": [item.model_dump() for item in prediction.explications[:5]],
+                "anomalies_prescription": [item.model_dump() for item in anomalies],
             },
         }
     return 200, corps, alerte
@@ -411,6 +421,16 @@ def _references(connection, facture: FactureIn) -> list[Rejet]:
             """,
         ),
         (
+            "ordonnance_id",
+            facture.ordonnance_id,
+            """
+            SELECT 1 FROM clean.ordonnances WHERE ordonnance_id = %s
+            UNION ALL
+            SELECT 1 FROM clean.ordonnances WHERE ordonnance_id = %s
+            LIMIT 1
+            """,
+        ),
+        (
             "contrat_id",
             facture.contrat_id,
             """
@@ -437,11 +457,18 @@ def _existe(connection, facture_id: str) -> bool:
     return row is not None
 
 
-def _variables(connection, facture: FactureIn) -> dict:
+def _variables(
+    connection,
+    facture: FactureIn,
+    ordonnance: dict | None,
+    lignes_ordonnance: list,
+) -> dict:
     donnees = facture.model_dump()
     return construire_variables(
         donnees,
         [ligne.model_dump() for ligne in facture.lignes],
+        ordonnance=ordonnance,
+        lignes_ordonnance=lignes_ordonnance,
         assure=_ligne_assure(connection, facture.assure_id),
         prestataire=_ligne_prestataire(connection, facture.prestataire_id),
         contrat=_ligne_contrat(connection, facture.contrat_id),
@@ -546,8 +573,8 @@ def _inserer_facture(connection, facture: FactureIn, acteur: str) -> None:
         INSERT INTO app.factures (
             facture_id, prestataire_id, assure_id, contrat_id, type_facture,
             date_soin, date_facture, date_reception, canal_reception, mode_reglement,
-            devise, nb_lignes, montant_total, statut, soumis_par
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            devise, nb_lignes, montant_total, statut, soumis_par, ordonnance_id
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             facture.facture_id,
@@ -565,6 +592,7 @@ def _inserer_facture(connection, facture: FactureIn, acteur: str) -> None:
             facture.montant_total,
             "SCOREE",
             acteur,
+            _option(facture.ordonnance_id),
         ),
     )
     for index, ligne in enumerate(facture.lignes, start=1):
@@ -632,6 +660,7 @@ def _lire_facture(connection, facture_id: str, principal: Principal) -> tuple[in
         "classe": None if prediction is None else prediction[1],
         "model_version": None if prediction is None else prediction[2],
         "decision": None if decision is None else {"decision": decision[0], "motif": decision[1]},
+        "anomalies_prescription": lire_anomalies(connection, facture_id),
     }
 
 

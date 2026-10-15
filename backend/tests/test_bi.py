@@ -41,7 +41,7 @@ class _Base:
 
     def execute(self, requete, _params=None):
         if "bi.volumes" in requete:
-            return _Lignes([(4, 4, 1, 3, 2, 1, 5)])
+            return _Lignes([(4, 4, 1, 3, 2, 1, 5, 12000, 0.25)])
         if "bi.alertes_par_statut" in requete:
             instant = datetime(2026, 10, 15, 1, 0, tzinfo=timezone.utc)
             return _Lignes([("webhook", "envoye", 2, instant)])
@@ -79,6 +79,8 @@ def test_tableau_bi(client, monkeypatch, entete) -> None:
     corps = response.json()
     assert corps["volumes"]["nb_factures"] == 4
     assert corps["volumes"]["nb_alertes_modele"] == 1
+    assert corps["volumes"]["montant_economise"] == 12000
+    assert corps["volumes"]["taux_detection"] == 0.25
     assert corps["alertes_par_statut"][0]["statut"] == "envoye"
     assert corps["decisions"][0]["decision"] == "complement"
     assert corps["decisions"][0]["score"] == 0.91

@@ -174,6 +174,14 @@ class Memoire:
                 return Lignes([])
             item = trouves[-1]
             return Lignes([(item["decision"], item["motif"])])
+        if "clean.ordonnances WHERE ordonnance_id" in texte:
+            return Lignes([])
+        if "anomalies_prescription" in texte:
+            return Lignes([])
+        if "diagnostic_incompatible" in texte:
+            return Lignes([(False,)])
+        if "clean.ordonnance_lignes" in texte:
+            return Lignes([])
         if "classe = 'alerte'" in texte:
             closes = {item["facture_id"] for item in self.decisions}
             derniers = {}

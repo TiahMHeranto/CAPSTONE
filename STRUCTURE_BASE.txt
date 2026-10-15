@@ -1,0 +1,493 @@
+PrediCare — structure de la base prediccare
+PostgreSQL 16, relevé sur la base en cours.
+Révision Alembic enregistrée : 005_flux.
+Les objets des migrations 006 et 007 (app.alertes, schéma bi) sont présents.
+Aucune ligne de données dans ce fichier.
+
+========================================================================
+SCHEMA raw
+Archive des CSV. Non servie par l'API.
+========================================================================
+
+raw.assures  (table)
+  assure_id                        text                         nullable=oui
+  contrat_id                       text                         nullable=oui
+  rang_beneficiaire                text                         nullable=oui
+  assure_principal_id              text                         nullable=oui
+  sexe                             text                         nullable=oui
+  annee_naissance                  text                         nullable=oui
+  ville                            text                         nullable=oui
+  date_adhesion                    text                         nullable=oui
+  date_radiation                   text                         nullable=oui
+
+raw.contrats  (table)
+  contrat_id                       text                         nullable=oui
+  numero_police                    text                         nullable=oui
+  souscripteur_id                  text                         nullable=oui
+  souscripteur_nom                 text                         nullable=oui
+  secteur                          text                         nullable=oui
+  formule                          text                         nullable=oui
+  date_effet_police                text                         nullable=oui
+  date_effet                       text                         nullable=oui
+  date_fin                         text                         nullable=oui
+  statut                           text                         nullable=oui
+  nb_beneficiaires                 text                         nullable=oui
+  prime_annuelle_totale            text                         nullable=oui
+
+raw.factures  (table)
+  facture_id                       text                         nullable=oui
+  numero_facture                   text                         nullable=oui
+  prestataire_id                   text                         nullable=oui
+  assure_id                        text                         nullable=oui
+  contrat_id                       text                         nullable=oui
+  ordonnance_id                    text                         nullable=oui
+  type_facture                     text                         nullable=oui
+  date_soin                        text                         nullable=oui
+  heure_soin                       text                         nullable=oui
+  date_facture                     text                         nullable=oui
+  date_reception                   text                         nullable=oui
+  canal_reception                  text                         nullable=oui
+  mode_reglement                   text                         nullable=oui
+  attestation_pec_id               text                         nullable=oui
+  entente_prealable_id             text                         nullable=oui
+  devise                           text                         nullable=oui
+  nb_lignes                        text                         nullable=oui
+  montant_total                    text                         nullable=oui
+  montant_eligible                 text                         nullable=oui
+  montant_pris_en_charge           text                         nullable=oui
+  reste_a_charge                   text                         nullable=oui
+  statut                           text                         nullable=oui
+  motif_rejet                      text                         nullable=oui
+  date_traitement                  text                         nullable=oui
+
+raw.garanties  (table)
+  formule                          text                         nullable=oui
+  categorie                        text                         nullable=oui
+  taux_remboursement               text                         nullable=oui
+  plafond_annuel_categorie         text                         nullable=oui
+  franchise_par_facture            text                         nullable=oui
+  delai_carence_jours              text                         nullable=oui
+  plafond_annuel_global            text                         nullable=oui
+  prime_annuelle_par_beneficiaire  text                         nullable=oui
+  attestation_requise              text                         nullable=oui
+  actes_exclus                     text                         nullable=oui
+  pieces_justificatives            text                         nullable=oui
+
+raw.grille_tarifaire  (table)
+  prestataire_id                   text                         nullable=oui
+  code                             text                         nullable=oui
+  tarif_pratique                   text                         nullable=oui
+
+raw.lignes_facture  (table)
+  ligne_id                         text                         nullable=oui
+  facture_id                       text                         nullable=oui
+  num_ligne                        text                         nullable=oui
+  code                             text                         nullable=oui
+  type_ligne                       text                         nullable=oui
+  libelle                          text                         nullable=oui
+  quantite                         text                         nullable=oui
+  prix_unitaire                    text                         nullable=oui
+  montant                          text                         nullable=oui
+
+raw.ordonnance_lignes  (table)
+  ordonnance_id                    text                         nullable=oui
+  num_ligne                        text                         nullable=oui
+  code                             text                         nullable=oui
+  libelle                          text                         nullable=oui
+  quantite                         text                         nullable=oui
+  posologie                        text                         nullable=oui
+
+raw.ordonnances  (table)
+  ordonnance_id                    text                         nullable=oui
+  assure_id                        text                         nullable=oui
+  prescripteur_id                  text                         nullable=oui
+  date_prescription                text                         nullable=oui
+  validite_jours                   text                         nullable=oui
+  type_ordonnance                  text                         nullable=oui
+  diagnostic                       text                         nullable=oui
+  renseignement_clinique           text                         nullable=oui
+
+raw.prestataires  (table)
+  prestataire_id                   text                         nullable=oui
+  nom                              text                         nullable=oui
+  type_prestataire                 text                         nullable=oui
+  specialite                       text                         nullable=oui
+  ville                            text                         nullable=oui
+  quartier                         text                         nullable=oui
+  adresse                          text                         nullable=oui
+  telephone                        text                         nullable=oui
+  numero_onm                       text                         nullable=oui
+  nif                              text                         nullable=oui
+  horaires                         text                         nullable=oui
+  jours_ouverture                  text                         nullable=oui
+  heure_ouverture                  text                         nullable=oui
+  heure_fermeture                  text                         nullable=oui
+  niveau_tarif                     text                         nullable=oui
+  note_qualite                     text                         nullable=oui
+  conventionne                     text                         nullable=oui
+  date_conventionnement            text                         nullable=oui
+  date_fin_convention              text                         nullable=oui
+  statut                           text                         nullable=oui
+
+raw.referentiel_actes  (table)
+  code_acte                        text                         nullable=oui
+  libelle                          text                         nullable=oui
+  categorie                        text                         nullable=oui
+  specialite                       text                         nullable=oui
+  tarif_min                        text                         nullable=oui
+  tarif_reference                  text                         nullable=oui
+  tarif_max                        text                         nullable=oui
+  ordonnance_requise               text                         nullable=oui
+  entente_prealable                text                         nullable=oui
+  sexe_requis                      text                         nullable=oui
+  age_min                          text                         nullable=oui
+  age_max                          text                         nullable=oui
+
+raw.referentiel_medicaments  (table)
+  code_medicament                  text                         nullable=oui
+  libelle                          text                         nullable=oui
+  prix_reference                   text                         nullable=oui
+  remboursable                     text                         nullable=oui
+  classe                           text                         nullable=oui
+  chronique                        text                         nullable=oui
+
+========================================================================
+SCHEMA clean
+Données pseudonymisées. Lecture agent limitée à l'assuré de la session.
+========================================================================
+
+clean.anomalies  (table)
+  id                               bigint                       nullable=non
+  regle                            text                         nullable=non
+  decision                         text                         nullable=non
+  table_cible                      text                         nullable=non
+  identifiant                      text                         nullable=oui
+  detail                           text                         nullable=non
+
+clean.assures  (table)
+  assure_id                        text                         nullable=non
+  contrat_id                       text                         nullable=oui
+  sexe                             text                         nullable=oui
+  ville                            text                         nullable=oui
+  date_adhesion                    date                         nullable=oui
+  date_radiation                   date                         nullable=oui
+  tranche_age                      text                         nullable=oui
+
+clean.contrats  (table)
+  contrat_id                       text                         nullable=non
+  formule                          text                         nullable=oui
+  date_effet                       date                         nullable=oui
+  date_fin                         date                         nullable=oui
+  statut                           text                         nullable=oui
+
+clean.factures  (table)
+  facture_id                       text                         nullable=non
+  prestataire_id                   text                         nullable=oui
+  assure_id                        text                         nullable=oui
+  contrat_id                       text                         nullable=oui
+  ordonnance_id                    text                         nullable=oui
+  type_facture                     text                         nullable=oui
+  date_soin                        date                         nullable=oui
+  date_facture                     date                         nullable=oui
+  date_reception                   date                         nullable=oui
+  date_traitement                  date                         nullable=oui
+  devise                           text                         nullable=oui
+  nb_lignes                        integer                      nullable=oui
+  montant_total                    bigint                       nullable=oui
+  montant_eligible                 bigint                       nullable=oui
+  montant_pris_en_charge           bigint                       nullable=oui
+  reste_a_charge                   bigint                       nullable=oui
+  statut                           text                         nullable=oui
+  motif_rejet                      text                         nullable=oui
+
+clean.lignes_facture  (table)
+  ligne_id                         text                         nullable=non
+  facture_id                       text                         nullable=non
+  num_ligne                        integer                      nullable=oui
+  code                             text                         nullable=oui
+  type_ligne                       text                         nullable=oui
+  quantite                         numeric                      nullable=oui
+  prix_unitaire                    bigint                       nullable=oui
+  montant                          bigint                       nullable=oui
+
+clean.ordonnances  (table)
+  ordonnance_id                    text                         nullable=non
+  assure_id                        text                         nullable=oui
+  prescripteur_id                  text                         nullable=oui
+  date_prescription                date                         nullable=oui
+  validite_jours                   integer                      nullable=oui
+
+clean.prestataires  (table)
+  prestataire_id                   text                         nullable=non
+  nom                              text                         nullable=oui
+  type_prestataire                 text                         nullable=oui
+  ville                            text                         nullable=oui
+  statut                           text                         nullable=oui
+
+clean.referentiel_actes  (table)
+  code_acte                        text                         nullable=non
+  libelle                          text                         nullable=oui
+  categorie                        text                         nullable=oui
+
+clean.referentiel_medicaments  (table)
+  code_medicament                  text                         nullable=non
+  libelle                          text                         nullable=oui
+  remboursable                     boolean                      nullable=oui
+
+========================================================================
+SCHEMA identites
+Coffre chiffré. Pas de lecture directe.
+========================================================================
+
+identites.coffre  (table)
+  pseudo_id                        text                         nullable=non
+  charge                           bytea                        nullable=non
+
+========================================================================
+SCHEMA labels
+Labels d'entraînement. Non servis par l'API.
+========================================================================
+
+labels.labels_fraude  (table)
+  facture_id                       text                         nullable=oui
+  est_fraude                       text                         nullable=oui
+  type_fraude                      text                         nullable=oui
+  detail_fraude                    text                         nullable=oui
+  est_valide                       text                         nullable=oui
+  motif_invalidite                 text                         nullable=oui
+
+labels.labels_prestataires  (table)
+  prestataire_id                   text                         nullable=oui
+  est_suspect                      text                         nullable=oui
+
+========================================================================
+SCHEMA app
+Scores, décisions, alertes, comptes. Compte de l'API.
+========================================================================
+
+app.alertes  (table)
+  id                               bigint                       nullable=non
+  facture_id                       text                         nullable=non
+  canal                            text                         nullable=non
+  statut                           text                         nullable=non
+  tentative                        integer                      nullable=non
+  score                            numeric                      nullable=oui
+  message                          text                         nullable=non
+  created_at                       timestamp with time zone     nullable=non
+
+app.assures  (table)
+  assure_id                        text                         nullable=non
+  contrat_id                       text                         nullable=non
+  rang_beneficiaire                text                         nullable=non
+  assure_principal_id              text                         nullable=oui
+  sexe                             text                         nullable=oui
+  ville                            text                         nullable=oui
+  date_adhesion                    date                         nullable=oui
+  date_radiation                   date                         nullable=oui
+  tranche_age                      text                         nullable=oui
+
+app.audit_log  (table)
+  id                               bigint                       nullable=non
+  created_at                       timestamp with time zone     nullable=non
+  acteur                           text                         nullable=oui
+  action                           text                         nullable=non
+  entite                           text                         nullable=oui
+  entite_id                        text                         nullable=oui
+  detail                           jsonb                        nullable=oui
+
+app.contrats  (table)
+  contrat_id                       text                         nullable=non
+  numero_police                    text                         nullable=non
+  formule                          text                         nullable=non
+  date_effet                       date                         nullable=oui
+  date_fin                         date                         nullable=oui
+  statut                           text                         nullable=non
+  nb_beneficiaires                 integer                      nullable=oui
+  prime_annuelle_totale            integer                      nullable=oui
+
+app.decisions  (table)
+  id                               bigint                       nullable=non
+  facture_id                       text                         nullable=non
+  prediction_id                    bigint                       nullable=oui
+  acteur                           text                         nullable=oui
+  decision                         text                         nullable=non
+  motif                            text                         nullable=oui
+  created_at                       timestamp with time zone     nullable=non
+
+app.documents  (table)
+  id                               bigint                       nullable=non
+  source                           text                         nullable=non
+  page                             integer                      nullable=oui
+  contenu                          text                         nullable=non
+  embedding                        vector(384)                  nullable=oui
+
+app.factures  (table)
+  facture_id                       text                         nullable=non
+  prestataire_id                   text                         nullable=oui
+  assure_id                        text                         nullable=oui
+  contrat_id                       text                         nullable=oui
+  ordonnance_id                    text                         nullable=oui
+  type_facture                     text                         nullable=oui
+  date_soin                        date                         nullable=oui
+  date_facture                     date                         nullable=oui
+  date_reception                   date                         nullable=oui
+  canal_reception                  text                         nullable=oui
+  mode_reglement                   text                         nullable=oui
+  devise                           text                         nullable=oui
+  nb_lignes                        integer                      nullable=oui
+  montant_total                    integer                      nullable=oui
+  montant_eligible                 integer                      nullable=oui
+  montant_pris_en_charge           integer                      nullable=oui
+  reste_a_charge                   integer                      nullable=oui
+  statut                           text                         nullable=oui
+  motif_rejet                      text                         nullable=oui
+  date_traitement                  date                         nullable=oui
+  soumis_par                       text                         nullable=oui
+
+app.garanties  (table)
+  formule                          text                         nullable=non
+  categorie                        text                         nullable=non
+  taux_remboursement               numeric                      nullable=non
+  plafond_annuel_categorie         integer                      nullable=oui
+  franchise_par_facture            integer                      nullable=oui
+  delai_carence_jours              integer                      nullable=oui
+  plafond_annuel_global            integer                      nullable=oui
+  attestation_requise              boolean                      nullable=non
+  actes_exclus                     text                         nullable=oui
+
+app.grille_tarifaire  (table)
+  prestataire_id                   text                         nullable=non
+  code                             text                         nullable=non
+  tarif_pratique                   integer                      nullable=non
+
+app.lignes_facture  (table)
+  ligne_id                         text                         nullable=non
+  facture_id                       text                         nullable=non
+  num_ligne                        integer                      nullable=non
+  code                             text                         nullable=non
+  type_ligne                       text                         nullable=non
+  libelle                          text                         nullable=oui
+  quantite                         numeric                      nullable=oui
+  prix_unitaire                    integer                      nullable=oui
+  montant                          integer                      nullable=oui
+
+app.model_registry  (table)
+  version                          text                         nullable=non
+  algorithme                       text                         nullable=non
+  seuil_metier                     numeric                      nullable=non
+  nb_colonnes                      integer                      nullable=non
+  metriques                        jsonb                        nullable=non
+  colonnes                         jsonb                        nullable=non
+  metadata_sha256                  text                         nullable=non
+  artefact_present                 boolean                      nullable=non
+  updated_at                       timestamp with time zone     nullable=non
+
+app.ordonnance_lignes  (table)
+  ordonnance_id                    text                         nullable=non
+  num_ligne                        integer                      nullable=non
+  code                             text                         nullable=non
+  libelle                          text                         nullable=oui
+  quantite                         numeric                      nullable=oui
+
+app.ordonnances  (table)
+  ordonnance_id                    text                         nullable=non
+  assure_id                        text                         nullable=non
+  prescripteur_id                  text                         nullable=oui
+  date_prescription                date                         nullable=oui
+  validite_jours                   integer                      nullable=oui
+
+app.predictions  (table)
+  id                               bigint                       nullable=non
+  facture_id                       text                         nullable=non
+  score                            numeric                      nullable=non
+  classe                           text                         nullable=non
+  model_version                    text                         nullable=non
+  created_at                       timestamp with time zone     nullable=non
+  duree_ms                         integer                      nullable=oui
+
+app.prestataires  (table)
+  prestataire_id                   text                         nullable=non
+  nom                              text                         nullable=non
+  type_prestataire                 text                         nullable=non
+  specialite                       text                         nullable=oui
+  ville                            text                         nullable=oui
+  niveau_tarif                     text                         nullable=oui
+  conventionne                     boolean                      nullable=non
+  statut                           text                         nullable=non
+
+app.referentiel_actes  (table)
+  code_acte                        text                         nullable=non
+  libelle                          text                         nullable=non
+  categorie                        text                         nullable=non
+  specialite                       text                         nullable=oui
+  tarif_min                        integer                      nullable=oui
+  tarif_reference                  integer                      nullable=oui
+  tarif_max                        integer                      nullable=oui
+  ordonnance_requise               boolean                      nullable=non
+  entente_prealable                boolean                      nullable=non
+  sexe_requis                      text                         nullable=oui
+  age_min                          integer                      nullable=oui
+  age_max                          integer                      nullable=oui
+
+app.referentiel_medicaments  (table)
+  code_medicament                  text                         nullable=non
+  libelle                          text                         nullable=non
+  prix_reference                   integer                      nullable=oui
+  remboursable                     boolean                      nullable=non
+  classe                           text                         nullable=oui
+  chronique                        boolean                      nullable=non
+
+app.settings  (table)
+  key                              text                         nullable=non
+  value                            text                         nullable=non
+  updated_at                       timestamp with time zone     nullable=non
+
+app.shap_explanations  (table)
+  id                               bigint                       nullable=non
+  prediction_id                    bigint                       nullable=non
+  rang                             integer                      nullable=non
+  variable                         text                         nullable=non
+  contribution                     numeric                      nullable=non
+  libelle                          text                         nullable=oui
+
+app.utilisateurs  (table)
+  identifiant                      text                         nullable=non
+  mot_de_passe_hash                text                         nullable=non
+  role                             text                         nullable=non
+  assure_id                        text                         nullable=oui
+  actif                            boolean                      nullable=non
+
+========================================================================
+SCHEMA bi
+Vues du tableau de bord. Compte prediccare_bi, lecture seule.
+========================================================================
+
+bi.alertes_par_statut  (vue)
+  canal                            text                         nullable=oui
+  statut                           text                         nullable=oui
+  nb                               bigint                       nullable=oui
+  derniere                         timestamp with time zone     nullable=oui
+
+bi.decisions_humaines  (vue)
+  facture_id                       text                         nullable=oui
+  decision                         text                         nullable=oui
+  acteur                           text                         nullable=oui
+  created_at                       timestamp with time zone     nullable=oui
+  score                            numeric                      nullable=oui
+  classe                           text                         nullable=oui
+  model_version                    text                         nullable=oui
+
+bi.distribution_scores  (vue)
+  model_version                    text                         nullable=oui
+  tranche                          text                         nullable=oui
+  nb                               bigint                       nullable=oui
+
+bi.volumes  (vue)
+  nb_factures                      bigint                       nullable=oui
+  nb_predictions                   bigint                       nullable=oui
+  nb_alertes_modele                bigint                       nullable=oui
+  nb_normales                      bigint                       nullable=oui
+  nb_notifications                 bigint                       nullable=oui
+  nb_decisions                     bigint                       nullable=oui
+  nb_rejets                        bigint                       nullable=oui
+

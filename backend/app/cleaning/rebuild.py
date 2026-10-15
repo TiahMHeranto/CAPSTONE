@@ -11,6 +11,7 @@ STEPS = [
         clean.anomalies,
         clean.lignes_facture,
         clean.factures,
+        clean.ordonnance_lignes,
         clean.ordonnances,
         clean.assures,
         clean.contrats,
@@ -87,6 +88,18 @@ STEPS = [
           SELECT ordonnance_id FROM raw.ordonnances
           GROUP BY ordonnance_id HAVING count(*) > 1
       )
+    """,
+    """
+    INSERT INTO clean.ordonnance_lignes (ordonnance_id, num_ligne, code, quantite)
+    SELECT DISTINCT ON (ligne.ordonnance_id, clean.to_int(ligne.num_ligne))
+        ligne.ordonnance_id,
+        clean.to_int(ligne.num_ligne)::integer,
+        NULLIF(ligne.code, ''),
+        clean.to_num(ligne.quantite)
+    FROM raw.ordonnance_lignes AS ligne
+    WHERE ligne.ordonnance_id IN (SELECT ordonnance_id FROM clean.ordonnances)
+      AND clean.to_int(ligne.num_ligne) IS NOT NULL
+    ORDER BY ligne.ordonnance_id, clean.to_int(ligne.num_ligne)
     """,
     """
     INSERT INTO clean.factures (

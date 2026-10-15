@@ -1,0 +1,245 @@
+PrediCare TPA — userflow aligné sur le cahier des charges
+Orange Digital Center / Ingedata. Données synthétiques, aucune donnée de santé réelle.
+Chaque parcours ci-dessous est celui du cahier. L'état indique ce que l'application fait aujourd'hui.
+
+================================================================================
+UTILITÉ
+================================================================================
+
+Réduire les remboursements injustifiés et le traitement manuel des factures
+de tiers payant. L'application contrôle une facture dès son dépôt, explique
+le score, alerte le gestionnaire, et doit répondre aux questions des assurés
+et des professionnels sur les garanties et l'avancement d'un dossier.
+
+================================================================================
+UTILISATEURS
+================================================================================
+
+Professionnel de santé    dépose les factures et suit celles qu'il a envoyées
+Assuré                    consulte ses remboursements et interroge l'assistant
+Gestionnaire              traite les alertes, tranche, suit l'activité
+Administrateur            règle le seuil, les canaux, la version du modèle,
+                          et surveille la plateforme
+
+Une équipe d'exploitation installe, sauvegarde et relance la pile sans
+modifier le code. Elle n'est pas un cinquième rôle de l'écran.
+
+================================================================================
+OBJECTIF DE L'APPLICATION
+================================================================================
+
+Plateforme unique, déployée, utilisable sans ligne de commande :
+
+1. Automatiser le contrôle des factures.
+2. Détecter les anomalies financières en temps réel, avec une explication.
+3. Détecter et alerter sur les anomalies de prescription.
+4. Fournir un assistant conversationnel sécurisé sur les contrats et
+   l'historique du compte connecté.
+5. Afficher les volumes traités, les montants économisés et le taux
+   de détection.
+
+Le seuil d'exemple 0,8 du cahier est un réglage, pas une valeur figée.
+
+================================================================================
+LIEU D'APPLICATION
+================================================================================
+
+Usage : organisme de tiers payant et d'assurance santé.
+Accès : une interface web, la même pour les quatre rôles.
+Données : jeu synthétique (assurés, contrats, prestataires, factures,
+actes, ordonnances sur 24 mois), labels de fraude séparés, corpus de
+contrats PDF prévu pour l'assistant.
+La pile backend démarre avec docker compose up. L'écran temporaire se
+lance à part.
+
+================================================================================
+FEATURES
+================================================================================
+
+En place
+  Connexion et jeton pour les quatre rôles
+  Dépôt d'une facture ou d'un lot, validation avant score
+  Rejet d'une facture invalide avec un code et un motif
+  Score XGBoost, classe, explications SHAP, enregistrement
+  Alerte n8n lorsque la classe est « alerte »
+  File des alertes sans décision, décision humaine
+     (valider, rejeter, demander un complément)
+  Lecture d'une facture selon le rôle
+  Remboursements de l'assuré lié au jeton
+  Vues de pilotage : volumes, alertes, décisions, répartition des scores
+  Métriques de volume, de latence et d'erreurs
+  Santé du service et de la base
+  Seuil d'alerte, canaux, adresse du workflow et version active
+     modifiables sans redémarrer l'API
+  Suivi de dérive des scores
+  Retour à une version précédente du modèle sans interruption
+  Pseudonymes, coffre d'identités chiffré, journal d'audit des actes sensibles
+  Sauvegarde et restauration scriptées
+  Migrations versionnées, chargement du jeu au premier démarrage
+  Pilotage : volumes, répartition, montant des rejets confirmés,
+     taux de détection
+  Ordonnances au dépôt : doublon, péremption, quantité, ligne absente,
+     spécialité hors diagnostic. Le texte du diagnostic n'est pas renvoyé
+
+Partielles
+  Notification : le workflow sait écrire Slack, e-mail ou webhook.
+     Le canal effectif est le journal interne.
+  Dérive : l'écran répond ; l'état reste « référence absente » tant que
+     le modèle n'a pas sa distribution de référence.
+
+Absentes, exigées par le cahier
+  Assistant : question, recherche dans les contrats vectorisés,
+     lecture de l'historique de l'assuré connecté, réponse sourcée
+  Corpus de contrats indexé dans la base vectorielle
+
+================================================================================
+PARCOURS COMMUN — CONNEXION
+================================================================================
+
+1. L'utilisateur ouvre l'écran de connexion.
+2. Il choisit son identifiant de rôle et son mot de passe.
+3. L'API vérifie le compte et renvoie un jeton qui porte le rôle.
+   Pour l'assuré, le jeton porte aussi son pseudonyme.
+4. L'écran n'affiche que les parcours de ce rôle.
+5. Sans jeton, l'API répond 401. Avec un mauvais rôle, elle répond 403.
+
+État : en place. La connexion n'est pas écrite dans le journal d'audit.
+
+================================================================================
+FLUX 1 — CONTRÔLE D'UNE FACTURE
+================================================================================
+
+Professionnel de santé ou gestionnaire
+
+1. Il saisit la facture : identifiant, type, dates, montant en MGA,
+   lignes (code du référentiel, quantité, prix).
+2. Il peut valider sans scorer.
+3. Il dépose la facture, seule ou dans un lot d'au plus 50.
+4. L'API contrôle le format, la devise, les dates, le total des lignes
+   et les codes du référentiel.
+5. Facture invalide : aucun score, réponse avec code et motif
+   (montant, dates, code inconnu, référence inconnue, doublon).
+6. Facture valide : score, classe, version du modèle, explications.
+   La facture, le score et les contributions sont enregistrés.
+7. Si la classe est « alerte », l'API appelle le workflow n8n après
+   l'enregistrement. Le message contient le score, le seuil, la version
+   et les principales contributions.
+8. Le professionnel ne relit ensuite que ses propres dépôts.
+   Le gestionnaire et l'administrateur lisent toutes les factures.
+
+État : en place. Sans identifiant d'ordonnance, les contrôles de
+prescription ne partent pas.
+
+Gestionnaire — traitement de l'alerte
+
+1. Il ouvre la file des scores en alerte encore sans décision.
+2. Il ouvre la facture et le rapport d'explications.
+3. Il tranche : valider, rejeter avec un motif, ou demander un complément.
+4. La décision est enregistrée. La facture sort de la file.
+
+État : en place. La décision ne prévient pas l'assuré ni le professionnel.
+
+Anomalies de prescription (cahier)
+
+1. Le contrôle repère un doublon de prescription pour le même assuré,
+   ou une inadéquation entre la prescription et la maladie.
+2. Le gestionnaire reçoit une alerte exploitable, distincte ou jointe
+   au score, et tranche.
+
+État : en place lorsque la facture cite une ordonnance connue.
+Le diagnostic n'est pas renvoyé : seule l'inadéquation l'est.
+
+================================================================================
+FLUX 2 — ASSISTANT
+================================================================================
+
+Assuré, professionnel de santé ou gestionnaire
+
+1. L'utilisateur pose une question en langage courant.
+   Exemples du cahier : avancement d'un remboursement, lecture d'un
+   barème de garantie.
+2. L'agent cherche dans les contrats vectorisés et, si la question
+   porte sur un dossier, dans l'historique de l'assuré connecté.
+3. Le compte de lecture ne voit que cet assuré.
+4. La réponse est factuelle et cite sa source.
+5. La question ne donne pas accès aux labels, au coffre d'identités
+   ni aux factures d'un autre assuré.
+
+État : absent. La table de documents vectorisés et le compte de lecture
+limité à l'assuré sont prêts. Aucune route d'assistant ne les utilise.
+
+Assuré — suivi de remboursement
+
+1. Il ouvre ses remboursements.
+2. Il ne voit que les factures de son pseudonyme : identifiant, statut,
+   montant, date de soin.
+3. Il peut ouvrir le détail de l'une d'elles.
+
+État : en place. La liste est vide si le compte n'a pas de pseudonyme.
+
+================================================================================
+FLUX 3 — PILOTAGE
+================================================================================
+
+Gestionnaire ou administrateur
+
+1. Il ouvre la synthèse.
+2. Il lit les volumes traités, les alertes, les décisions et la
+   répartition des scores.
+3. Il lit aussi le montant des rejets confirmés et le taux de détection.
+4. Un clic vers le détail d'une facture déjà scorée reste possible
+   par son identifiant.
+
+État : en place.
+
+================================================================================
+ADMINISTRATEUR — SOCLE
+================================================================================
+
+Configuration
+
+1. Il lit le seuil d'alerte, les canaux, l'adresse du workflow,
+   la version active et le seuil de dérive.
+2. Il les modifie. Le prochain score utilise la nouvelle valeur
+   sans redémarrage.
+3. Les secrets restent dans le fichier d'environnement, hors du code.
+
+État : en place pour le seuil, les canaux, l'adresse, la version
+et le seuil de dérive.
+
+Supervision
+
+1. Il consulte la santé du service et de la base.
+2. Il lit le volume, la latence, les erreurs et la dérive.
+3. Les journaux de requêtes portent l'instant, la route, le statut
+   et la durée, sans corps de facture ni jeton.
+
+État : en place. La santé publique affiche la constante du service.
+La version qui score est celle du réglage.
+
+Modèle
+
+1. Il bascule la version active, ou revient à la version précédente.
+2. L'API continue de répondre pendant la bascule.
+3. Le registre conserve l'algorithme, le nombre de variables et
+   les métriques fournies avec le modèle.
+
+État : en place.
+
+Identités et sauvegarde
+
+1. Avec la clef administrateur, il peut réidentifier ou effacer
+   un pseudonyme. L'acte est audité.
+2. L'exploitation lance la sauvegarde et la restauration par les
+   scripts, sans passer par l'écran.
+
+État : en place.
+
+================================================================================
+CE QUE LE CAHIER N'EXIGE PAS DANS CE PARCOURS
+================================================================================
+
+Pas de second facteur, pas de création de comptes dans l'écran,
+pas d'upload de PDF par le professionnel, pas de statistiques
+personnelles pour l'assuré ou le professionnel, pas d'export
+du tableau de bord. Ces éléments ne font pas partie de ce userflow.

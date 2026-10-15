@@ -54,6 +54,8 @@ REFUS = [
         },
     ),
     ("get", "/alerts/journal", "assure", None),
+    ("get", "/alerts/prescriptions", "prestataire", None),
+    ("get", "/alerts/prescriptions", "assure", None),
     (
         "post",
         "/invoices/FAC-ROLE/decisions",
