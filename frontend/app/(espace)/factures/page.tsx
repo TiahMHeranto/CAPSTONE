@@ -6,6 +6,14 @@ import { Bandeau, Carte, Etiquette, bouton, boutonSecond, champ } from "@/compon
 import { appel, type Reponse } from "@/lib/api";
 import { lireSession, type Role } from "@/lib/session";
 
+type Dossier = {
+  facture_id: string;
+  statut: string | null;
+  type_facture: string | null;
+  montant_total: number | null;
+  date_soin: string | null;
+};
+
 function aujourdHui() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -30,11 +38,19 @@ export default function Page() {
   const [recherche, setRecherche] = useState("FAC-MODELE-0001");
   const [lot, setLot] = useState("");
   const [reponse, setReponse] = useState<Reponse | null>(null);
+  const [dossier, setDossier] = useState<Dossier[]>([]);
   const [enCours, setEnCours] = useState(false);
 
   useEffect(() => {
-    setRole(lireSession()?.role ?? null);
+    const session = lireSession();
+    const actuel = session?.role ?? null;
+    setRole(actuel);
     setFactureId(identifiantFacture());
+    if (actuel === "assure" || actuel === "prestataire") {
+      appel("/me/factures").then((recu) => {
+        if (recu.status === 200) setDossier((recu.data.factures as Dossier[]) ?? []);
+      });
+    }
   }, []);
 
   const peutDeposer = role === "prestataire" || role === "gestionnaire";
@@ -96,6 +112,27 @@ export default function Page() {
           doublon.
         </p>
       </div>
+      {role === "assure" || role === "prestataire" ? (
+        <Carte titre="Dossier du compte">
+          {dossier.length === 0 ? (
+            <p className="text-sm">Aucune facture pour la personne rattachée à ce compte.</p>
+          ) : (
+            <ul className="divide-y divide-line text-sm">
+              {dossier.map((ligne) => (
+                <li key={ligne.facture_id} className="flex flex-wrap justify-between gap-2 py-3">
+                  <a className="font-semibold text-teal" href={`/factures/${ligne.facture_id}`}>
+                    {ligne.facture_id}
+                  </a>
+                  <span>
+                    {ligne.type_facture ?? "—"} · {ligne.statut ?? "—"} · {ligne.montant_total ?? "—"} ·{" "}
+                    {ligne.date_soin ?? "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Carte>
+      ) : null}
       <Carte titre="Lire une facture">
         <form
           className="flex flex-col gap-3 sm:flex-row"

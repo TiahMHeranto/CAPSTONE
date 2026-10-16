@@ -103,6 +103,7 @@ def grant_app_role() -> None:
         sql.SQL("REVOKE ALL ON ALL TABLES IN SCHEMA identites FROM {}").format(app_user),
         sql.SQL("GRANT USAGE ON SCHEMA identites TO {}").format(app_user),
         sql.SQL("GRANT EXECUTE ON FUNCTION identites.lire_charge(text) TO {}").format(app_user),
+        sql.SQL("GRANT EXECUTE ON FUNCTION identites.lire_annuaire() TO {}").format(app_user),
         sql.SQL("GRANT EXECUTE ON FUNCTION identites.effacer_charge(text) TO {}").format(app_user),
         sql.SQL("REVOKE ALL ON SCHEMA labels FROM {}").format(app_user),
         sql.SQL("REVOKE ALL ON SCHEMA raw FROM {}").format(app_user),

@@ -17,6 +17,7 @@ class Principal:
     identifiant: str
     role: str
     assure_id: str | None
+    prestataire_id: str | None = None
 
 
 class AccesRefuse(Exception):
@@ -50,6 +51,7 @@ def emettre(
     role: str,
     assure_id: str | None,
     duree_s: int = DUREE_SESSION_S,
+    prestataire_id: str | None = None,
 ) -> str:
     if role not in ROLES:
         raise ValueError("role inconnu")
@@ -57,6 +59,7 @@ def emettre(
         "sub": identifiant,
         "role": role,
         "assure": assure_id,
+        "prestataire": prestataire_id,
         "exp": int(time.time()) + duree_s,
     }
     brut = base64.urlsafe_b64encode(json.dumps(corps, separators=(",", ":")).encode()).decode()
@@ -89,4 +92,10 @@ def lire_jeton(authorization: str | None) -> Principal | None:
     except (ValueError, json.JSONDecodeError, TypeError):
         return None
     assure = corps.get("assure")
-    return Principal(str(corps["sub"]), role, None if not assure else str(assure))
+    prestataire = corps.get("prestataire")
+    return Principal(
+        str(corps["sub"]),
+        role,
+        None if not assure else str(assure),
+        None if not prestataire else str(prestataire),
+    )

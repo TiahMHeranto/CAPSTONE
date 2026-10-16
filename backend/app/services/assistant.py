@@ -45,8 +45,8 @@ def repondre(question: str, principal: Principal) -> tuple[int, dict]:
             if cache is not None:
                 cache["cache"] = True
                 return 200, cache
-            contrat = _contrat(connection, assure)
-            extraits = _chercher(connection, vecteur, contrat)
+            contrat = _contrat(connection, assure) if principal.role == "assure" else None
+            extraits = _chercher(connection, vecteur, principal.role, contrat)
             historique = _historique(connection, assure)
             texte = generer(question, extraits, historique)
             sources = []
@@ -147,18 +147,38 @@ def _contrat(connection, assure_id: str | None) -> str | None:
     return row[0]
 
 
-def _chercher(connection, vecteur: list[float], contrat_id: str | None) -> list[dict]:
-    rows = connection.execute(
+def _chercher(connection, vecteur: list[float], role: str, contrat_id: str | None) -> list[dict]:
+    vecteur_sql = _texte(vecteur)
+    if role == "administrateur":
+        requete = """
+        SELECT source, page, contenu
+        FROM app.documents
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <=> %s::vector
+        LIMIT 8
         """
+        params: tuple = (vecteur_sql,)
+    elif role == "assure":
+        requete = """
         SELECT source, page, contenu
         FROM app.documents
         WHERE embedding IS NOT NULL
           AND (contrat_id IS NULL OR contrat_id = %s)
         ORDER BY embedding <=> %s::vector
         LIMIT 8
-        """,
-        (contrat_id, _texte(vecteur)),
-    ).fetchall()
+        """
+        params = (contrat_id, vecteur_sql)
+    else:
+        requete = """
+        SELECT source, page, contenu
+        FROM app.documents
+        WHERE embedding IS NOT NULL
+          AND contrat_id IS NULL
+        ORDER BY embedding <=> %s::vector
+        LIMIT 8
+        """
+        params = (vecteur_sql,)
+    rows = connection.execute(requete, params).fetchall()
     return [{"source": row[0], "page": row[1], "contenu": row[2]} for row in rows]
 
 

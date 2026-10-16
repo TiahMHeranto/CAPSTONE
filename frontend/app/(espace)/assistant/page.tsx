@@ -30,8 +30,9 @@ export default function Page() {
       <div>
         <h1 className="text-4xl">Assistant</h1>
         <p className="mt-2 text-sm text-ink/70">
-          Les réponses viennent des contrats indexés. Un assuré voit aussi ses propres factures. Une question qui
-          cherche à sortir de ce périmètre est refusée.
+          Les conditions générales, le barème et les guides sont communs. Les conditions particulières d'un contrat
+          ne sont lues que par l'assuré de ce contrat et par l'administrateur. Un assuré voit en plus ses propres
+          factures. Une question qui cherche à sortir de ce périmètre est refusée.
         </p>
       </div>
       <Carte>

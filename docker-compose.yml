@@ -72,7 +72,7 @@ services:
     volumes:
       - ./models:/app/models:ro
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "0.0.0.0:${API_PORT:-8000}:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully

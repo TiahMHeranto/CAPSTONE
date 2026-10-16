@@ -14,6 +14,14 @@ class LoginIn(BaseModel):
     mot_de_passe: str = Field(min_length=1, max_length=200)
 
 
+class UtilisateurIn(BaseModel):
+    identifiant: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    mot_de_passe: str = Field(min_length=8, max_length=200)
+    role: Literal["prestataire", "assure", "gestionnaire", "administrateur"]
+    assure_id: str | None = Field(default=None, max_length=64)
+    prestataire_id: str | None = Field(default=None, max_length=64)
+
+
 class LotFacturesIn(BaseModel):
     factures: list[FactureIn] = Field(min_length=1, max_length=50)
 

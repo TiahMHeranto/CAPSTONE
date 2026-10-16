@@ -10,7 +10,7 @@
 
 ## Rôles HTTP
 
-`GET /health` et `POST /auth/login` sont publics. Les autres routes exigent `Authorization: Bearer`. Le jeton porte le rôle et, pour l'assuré, le pseudonyme. L'en-tête `X-Admin-Key` ouvre seulement les routes administrateur.
+`GET /health` et `POST /auth/login` sont publics. Les autres routes exigent `Authorization: Bearer`. Le jeton porte le rôle, le pseudonyme de l'assuré et, pour un professionnel, l'identifiant d'établissement. L'en-tête `X-Admin-Key` ouvre seulement les routes administrateur.
 
 | Route | Prestataire | Assuré | Gestionnaire | Administrateur |
 |---|---|---|---|---|
@@ -25,6 +25,9 @@
 | `GET /alerts/journal` | | | oui | oui |
 | `POST /invoices/{id}/decisions` | | | oui | |
 | `GET /me/remboursements` | | les siens | | |
+| `POST /admin/utilisateurs`, `GET /admin/utilisateurs`, `GET /admin/annuaire` | | | | oui |
+| `GET /me/profil` | le sien | le sien | le sien | le sien |
+| `GET /me/contrat`, `GET /me/factures`, `GET /me/ordonnances` | son établissement | son dossier | | |
 | `GET /metrics` | | | oui | oui |
 | `GET /bi` | | | oui | oui |
 | `GET` et `PATCH /admin/settings` | | | | oui |

@@ -628,7 +628,10 @@ def _lire_facture(connection, facture_id: str, principal: Principal) -> tuple[in
         """,
         (facture_id,),
     ).fetchone()
-    if row is None or not _visible(principal, row[7], row[8]):
+    if row is None:
+        return _lire_facture_clean(connection, facture_id, principal)
+    prestataire = row[9] if len(row) > 9 else None
+    if not _visible(principal, row[7], row[8], prestataire):
         return 404, {"code": "FACTURE_INCONNUE", "motif": "facture introuvable"}
     prediction = connection.execute(
         """
@@ -666,10 +669,43 @@ def _lire_facture(connection, facture_id: str, principal: Principal) -> tuple[in
     }
 
 
-def _visible(principal: Principal, assure_id, soumis_par) -> bool:
+def _lire_facture_clean(connection, facture_id: str, principal: Principal) -> tuple[int, dict]:
+    row = connection.execute(
+        """
+        SELECT facture_id, statut, montant_total, devise, type_facture,
+               date_soin::text, date_facture::text, assure_id, prestataire_id,
+               contrat_id, ordonnance_id
+        FROM clean.factures
+        WHERE facture_id = %s
+        """,
+        (facture_id,),
+    ).fetchone()
+    if row is None or not _visible(principal, row[7], None, row[8]):
+        return 404, {"code": "FACTURE_INCONNUE", "motif": "facture introuvable"}
+    return 200, {
+        "facture_id": row[0],
+        "statut": row[1],
+        "montant_total": row[2],
+        "devise": row[3],
+        "type_facture": row[4],
+        "date_soin": row[5],
+        "date_facture": row[6],
+        "contrat_id": row[9],
+        "ordonnance_id": row[10],
+        "score": None,
+        "classe": None,
+        "model_version": None,
+        "decision": None,
+        "anomalies_prescription": [],
+    }
+
+
+def _visible(principal: Principal, assure_id, soumis_par, prestataire_id=None) -> bool:
     if principal.role in {"gestionnaire", "administrateur"}:
         return True
     if principal.role == "prestataire":
+        if prestataire_id and principal.prestataire_id == prestataire_id:
+            return True
         return soumis_par == principal.identifiant
     if principal.role == "assure":
         return bool(principal.assure_id) and principal.assure_id == assure_id

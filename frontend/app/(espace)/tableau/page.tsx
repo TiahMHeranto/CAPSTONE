@@ -8,8 +8,12 @@ import { LIENS } from "@/lib/navigation";
 import { LIBELLES, lireSession, type Role } from "@/lib/session";
 
 const PARCOURS: Record<Role, string[]> = {
-  prestataire: ["Valider une facture", "Déposer une facture ou un lot", "Relire ses propres dépôts"],
-  assure: ["Consulter une facture qui le concerne", "Voir ses remboursements"],
+  prestataire: [
+    "Lire la fiche de son établissement, ses factures et ses ordonnances",
+    "Valider une facture",
+    "Déposer une facture ou un lot",
+  ],
+  assure: ["Lire son profil, son contrat, ses factures et ses ordonnances", "Voir ses remboursements"],
   gestionnaire: [
     "Déposer et scorer",
     "Lire le score et les contributions",
@@ -19,6 +23,7 @@ const PARCOURS: Record<Role, string[]> = {
   administrateur: [
     "Changer le seuil et la version active",
     "Lire la dérive et la supervision",
+    "Créer un compte rattaché à un assuré ou à un établissement",
     "Réidentifier ou effacer un pseudonyme avec la clef admin",
   ],
 };

@@ -25,7 +25,7 @@ def login(payload: LoginIn, request: Request) -> JSONResponse:
         with ouvrir() as connection:
             row = connection.execute(
                 """
-                SELECT mot_de_passe_hash, role, assure_id, actif
+                SELECT mot_de_passe_hash, role, assure_id, actif, prestataire_id
                 FROM app.utilisateurs
                 WHERE identifiant = %s
                 """,
@@ -43,7 +43,11 @@ def login(payload: LoginIn, request: Request) -> JSONResponse:
             status_code=401,
             content={"code": "IDENTIFIANTS_INVALIDES", "motif": "identifiants refuses"},
         )
+    prestataire = row[4] if len(row) > 4 else None
     return JSONResponse(
         status_code=200,
-        content={"token": emettre(payload.identifiant, row[1], row[2]), "role": row[1]},
+        content={
+            "token": emettre(payload.identifiant, row[1], row[2], prestataire_id=prestataire),
+            "role": row[1],
+        },
     )

@@ -1,0 +1,138 @@
+Utilisateurs de PrediCare TPA
+============================
+
+Le cahier des charges prévoit quatre rôles sur une même interface : professionnel
+de santé, assuré, gestionnaire et administrateur. Le jeu synthétique ne décrit
+que deux populations : les prestataires qui facturent, et les assurés couverts.
+Le gestionnaire et l'administrateur ne sont pas des personnes du fichier. Ce
+sont des fonctions de la compagnie qui gère le tiers payant.
+
+En base, quatre comptes de démonstration existent dans app.utilisateurs. Ils
+sont actifs. Aucun n'est relié à une personne du jeu tant que AUTH_ASSURE_ID
+est vide.
+
+  Identifiant       Rôle              Personne liée
+  prestataire       prestataire       aucune
+  assure            assure            aucune
+  gestionnaire      gestionnaire      aucune
+  administrateur    administrateur    aucune
+
+Le mot de passe est celui de AUTH_DEMO_PASSWORD, posé au premier chargement.
+Le rôle est recopié dans le jeton. Une route refuse un rôle qui n'est pas le
+sien.
+
+
+1. Professionnels de santé
+--------------------------
+
+Dans le cahier, c'est l'utilisateur qui dépose les factures et les ordonnances,
+suit l'avancement d'un remboursement et interroge l'assistant sur les barèmes.
+Il ne tranche pas une alerte. Il ne relit ensuite que ses propres dépôts.
+
+Dans le jeu, ce sont les 251 prestataires de dataset/prestataires.csv. Ce sont
+des établissements ou des cabinets, identifiés PRE-00001, PRE-00002, et ainsi
+de suite. Le nom du fichier est une raison sociale, pas l'identité d'un assuré.
+Le jeu est fictif.
+
+Tous sont conventionnés. 242 sont ACTIF, 9 sont RADIE.
+
+  Type                      Nombre
+  Pharmacie                    60
+  Cabinet de spécialiste       42
+  Cabinet de généraliste       35
+  Cabinet dentaire             30
+  Clinique                     25
+  Opticien                     18
+  Laboratoire                  15
+  Centre d'imagerie            10
+  Cabinet de kinésithérapie     8
+  Maternité                     8
+
+Seuls les 42 spécialistes ont une spécialité. Trois cabinets pour chacune de
+ces disciplines : cardiologie, pédiatrie, gynécologie, ophtalmologie,
+dermatologie, ORL, neurologie, pneumologie, endocrinologie,
+gastro-entérologie. Deux cabinets pour : rhumatologie, psychiatrie, urologie,
+néphrologie, traumato-orthopédie, cancérologie.
+
+Villes : Antananarivo 177, Toamasina 23, Mahajanga 13, Antsirabe 13,
+Fianarantsoa 13, Toliara 8, Antsiranana 4.
+
+Niveau de tarif : raisonnable 155, élevé 69, très élevé 27.
+
+Le compte de connexion prestataire n'est rattaché à aucun de ces PRE-.
+
+
+2. Assurés
+----------
+
+Dans le cahier, l'assuré suit ses remboursements et interroge l'assistant sur
+ses garanties. Il ne voit que son propre dossier. Il ne dépose pas de facture
+et ne tranche pas une alerte.
+
+Dans le jeu, ce sont les 4 459 bénéficiaires de dataset/assures.csv. Chacun a
+un identifiant opaque ASS-…, un contrat, un rang et une ville. Il y a exactement
+un assuré principal par contrat.
+
+  Rang                 Nombre
+  Enfant                2 147
+  Assuré principal      1 500
+  Conjoint                812
+
+Sexe : 2 263 femmes, 2 196 hommes.
+
+Âge rapporté à 2026 : 1 774 ont 17 ans ou moins, 1 271 ont de 18 à 39 ans,
+1 129 ont de 40 à 59 ans, 285 ont 60 ans ou plus. Les années de naissance vont
+de 1955 à 2024.
+
+Villes : Antananarivo 3 121, Toamasina 370, Antsirabe 297, Mahajanga 234,
+Fianarantsoa 189, Toliara 167, Antsiranana 81.
+
+Les 1 500 contrats viennent de dataset/contrats.csv. Le souscripteur est une
+entreprise ou un particulier. Formules des contrats : Essentiel 835, Premium
+352, Confort 313. Côté personnes : 2 474 en Essentiel, 1 033 en Premium, 952
+en Confort.
+
+Statut des contrats : 1 391 actifs, 109 résiliés. Les 329 personnes d'un
+contrat résilié ont une date de radiation. Les 4 130 autres n'en ont pas.
+
+Secteurs des contrats : transport et logistique 200, hôtellerie et tourisme
+192, particulier 191, agroalimentaire 186, conseil et audit 173, industrie
+textile 131, télécommunications 122, services numériques 66, services aux
+entreprises 65, commerce et distribution 61, bâtiment et travaux publics 59,
+mines et énergie 54.
+
+Le nom, les prénoms, le téléphone, l'e-mail, l'adresse et le CIN sont dans
+dataset/identites_pii.csv, une ligne par assuré. En base, ces champs sont
+chiffrés. L'application ne sert que le pseudonyme. Le compte de démonstration
+assure n'est lié à aucune de ces personnes tant que AUTH_ASSURE_ID est vide.
+
+
+3. Gestionnaires
+----------------
+
+Aucune ligne du jeu ne décrit un gestionnaire. C'est la personne de la
+compagnie qui examine les factures signalées par le modèle.
+
+Quand le score dépasse le seuil, il reçoit l'alerte avec les explications. Il
+tranche : valider, rejeter avec un motif, ou demander un complément. L'alerte
+n'est jamais un refus automatique. Il voit toutes les factures, la synthèse
+des volumes et le pilotage. Il peut interroger l'assistant sur les garanties.
+
+En base, un seul compte de démonstration : gestionnaire. Pas de nom, pas de
+ville, pas de contrat, pas de lien vers un assuré.
+
+
+4. Administrateurs
+------------------
+
+Aucune ligne du jeu ne décrit un administrateur. C'est la personne qui tient
+la plateforme.
+
+Il change sans redémarrage le seuil d'alerte, les canaux de notification,
+l'adresse du workflow et la version du modèle. Il consulte la santé du
+service, les volumes, la latence, les erreurs et la dérive. Avec la clef
+administrateur, il peut relire ou effacer l'identité chiffrée d'un pseudonyme.
+Cet acte est audité.
+
+En base, un seul compte de démonstration : administrateur. Pas de nom, pas de
+ville, pas de contrat, pas de lien vers un assuré.
