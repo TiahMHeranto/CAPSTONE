@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field
 from app.schemas.facture import FactureIn
 
 
+class QuestionIn(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+
+
 class LoginIn(BaseModel):
     identifiant: str = Field(min_length=1, max_length=64)
     mot_de_passe: str = Field(min_length=1, max_length=200)

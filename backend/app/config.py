@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     dataset_dir: str = "CohorteAI_datagen/dataset"
     labels_dir: str = "CohorteAI_datagen/labels"
     models_dir: str = "models"
+    ollama_url: str = "http://host.docker.internal:11434"
+    ollama_model: str = "llama3.2"
+    ollama_embed_model: str = "nomic-embed-text"
+    rag_dir: str = "/corpus"
+    assistant_cache_similarite: float = 0.92
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

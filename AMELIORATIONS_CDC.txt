@@ -1,6 +1,6 @@
 PrediCare TPA — améliorations pour couvrir le cahier des charges
 Chaque point part d'une exigence du cahier encore ouverte.
-L'assistant est inclus : le cahier le demande.
+L'assistant est en place : contrats indexés, réponse sourcée, filtre et cache.
 
 Déjà couvert, à ne pas refaire
   Contrôle, score, SHAP, rejet motivé, décision humaine
@@ -139,9 +139,11 @@ Exigence
   réponse sourcée. Protection contre l'injection de prompt.
   Le module FinOps demande aussi un cache sémantique.
 
-Écart
-  La table de documents et le compte de lecture limité à l'assuré
-  sont prêts. Aucune route, aucun corpus indexé, aucun écran.
+État
+  Backend en place. Les contrats PDF sont indexés. POST /assistant
+  répond à partir de ces extraits, cite la source, refuse une question
+  hors périmètre et reprend une question proche depuis le cache.
+  L'historique lu est celui de l'assuré du jeton.
 
 Amélioration
   Indexer le corpus de contrats PDF dans la base vectorielle.
@@ -172,5 +174,4 @@ ORDRE UTILE
 1. Ordonnances sur le dépôt, puis indicateurs de pilotage.
 2. Écran dans la pile, guide par rôle, canal Slack ou e-mail.
 3. Distribution de référence pour la dérive.
-4. Assistant, une fois le corpus disponible.
-5. Dossier FinOps, équité, EU AI Act et slides en parallèle.
+4. Dossier FinOps, équité, EU AI Act et slides en parallèle.

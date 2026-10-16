@@ -48,7 +48,7 @@ Usage : organisme de tiers payant et d'assurance santé.
 Accès : une interface web, la même pour les quatre rôles.
 Données : jeu synthétique (assurés, contrats, prestataires, factures,
 actes, ordonnances sur 24 mois), labels de fraude séparés, corpus de
-contrats PDF prévu pour l'assistant.
+contrats PDF indexés pour l'assistant.
 La pile backend démarre avec docker compose up. L'écran temporaire se
 lance à part.
 
@@ -80,17 +80,15 @@ En place
      taux de détection
   Ordonnances au dépôt : doublon, péremption, quantité, ligne absente,
      spécialité hors diagnostic. Le texte du diagnostic n'est pas renvoyé
+  Assistant : question, recherche dans les contrats indexés,
+     historique limité à l'assuré du jeton, réponse sourcée,
+     filtre d'injection, cache sémantique
 
 Partielles
   Notification : le workflow sait écrire Slack, e-mail ou webhook.
      Le canal effectif est le journal interne.
   Dérive : l'écran répond ; l'état reste « référence absente » tant que
      le modèle n'a pas sa distribution de référence.
-
-Absentes, exigées par le cahier
-  Assistant : question, recherche dans les contrats vectorisés,
-     lecture de l'historique de l'assuré connecté, réponse sourcée
-  Corpus de contrats indexé dans la base vectorielle
 
 ================================================================================
 PARCOURS COMMUN — CONNEXION
@@ -165,8 +163,9 @@ Assuré, professionnel de santé ou gestionnaire
 5. La question ne donne pas accès aux labels, au coffre d'identités
    ni aux factures d'un autre assuré.
 
-État : absent. La table de documents vectorisés et le compte de lecture
-limité à l'assuré sont prêts. Aucune route d'assistant ne les utilise.
+État : en place. 184 fragments de contrats sont indexés (768 dimensions).
+Les conditions particulières ne sont lues que pour le contrat de l'assuré
+connecté. Une question hors périmètre est refusée avant tout appel au modèle.
 
 Assuré — suivi de remboursement
 

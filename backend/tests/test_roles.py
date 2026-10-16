@@ -98,6 +98,14 @@ REFUS = [
     ("get", "/admin/drift", "prestataire", None),
     ("get", "/admin/supervision", "gestionnaire", None),
     ("get", "/admin/supervision", "assure", None),
+    ("get", "/read", "prestataire", None),
+    ("get", "/read", "assure", None),
+    ("get", "/read/factures", "prestataire", None),
+    ("get", "/read/factures", "assure", None),
+    ("get", "/read/journal", "prestataire", None),
+    ("get", "/read/journal", "assure", None),
+    ("get", "/read/app/factures", "prestataire", None),
+    ("get", "/read/app/factures", "assure", None),
 ]
 
 

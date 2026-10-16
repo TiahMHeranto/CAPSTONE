@@ -14,6 +14,7 @@
 
 | Route | Prestataire | Assuré | Gestionnaire | Administrateur |
 |---|---|---|---|---|
+| `POST /assistant` | oui | oui | oui | oui |
 | `POST /invoices/validate` | oui | | oui | oui |
 | `POST /invoices`, `POST /invoices/batch` | oui | | oui | |
 | `GET /invoices/{id}` | ses dépôts | les siens | oui | oui |
@@ -28,6 +29,7 @@
 | `GET /bi` | | | oui | oui |
 | `GET` et `PATCH /admin/settings` | | | | oui |
 | `GET /admin/drift`, `GET /admin/supervision` | | | | oui |
+| `GET /read`, `GET /read/factures`, `GET /read/journal`, `GET /read/{schema}/{table}` | | | oui | oui |
 | `POST /admin/reidentify`, `POST /admin/erase` | | | | clef admin |
 
 Un assuré ne reçoit que les factures dont `assure_id` est le pseudonyme de son jeton. Un autre rôle sur la même route reçoit `403`. Sans jeton, `401`.

@@ -64,6 +64,11 @@ services:
       RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-20}
       RATE_LIMIT_ADMIN: ${RATE_LIMIT_ADMIN:-10}
       RATE_LIMIT_WINDOW_S: ${RATE_LIMIT_WINDOW_S:-60}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      RAG_DIR: ${RAG_DIR:-/corpus}
+      ASSISTANT_CACHE_SIMILARITE: ${ASSISTANT_CACHE_SIMILARITE:-0.92}
     volumes:
       - ./models:/app/models:ro
     ports:
