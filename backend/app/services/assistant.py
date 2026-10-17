@@ -135,8 +135,9 @@ def generer(
                         "donne chaque formule. Cite le nom du document. "
                         "Si l'historique liste des factures, recopie "
                         "l'identifiant, le statut, le montant et la date. "
-                        "Si l'historique est un total ou un nombre, cite ces "
-                        "chiffres. Une regle ou un plafond vient des extraits. "
+                        "Si l'historique est un montant, un total ou un nombre, "
+                        "cite ces chiffres meme sans identifiant. "
+                        "Une regle ou un plafond vient des extraits. "
                         "Si l'information manque, dis que tu ne la trouves pas. "
                         "N'invente pas un montant."
                     ),
@@ -351,8 +352,9 @@ def proposer_sql(question: str, erreur: str = "") -> str:
         + "\n\nExemples:\n"
         + exemples_proches(question)
         + "\n\nRegles: une seule requete SELECT sur ces vues. Pas de SELECT *. "
-        + "Pour une liste, choisis des lignes avec facture_id, statut, montant "
-        + "et date, pas seulement un total. "
+        + "Pour une liste ou un detail, choisis des lignes avec facture_id "
+        + "ou ordonnance_id, le statut, le montant et la date. "
+        + "Pour un montant, un statut ou une date, une seule ligne suffit. "
         + "N'ecris un identifiant ASS-, PRE- ou CTR- que si tu es l'administrateur."
     )
     if erreur:

@@ -37,7 +37,9 @@ _RADICAUX = {
     "ordonnances": "ordonnance",
     "derniere": "dernier",
     "details": "detail",
+    "detailler": "detail",
     "montants": "montant",
+    "afficher": "liste",
 }
 
 
@@ -81,7 +83,7 @@ def exemples_proches(question: str, nombre: int = 4) -> str:
     for exemple in _EXEMPLES:
         autres = {_radical(mot) for mot in norm(exemple["question"]).split()}
         notes.append((len(mots & autres), exemple))
-    notes.sort(key=lambda item: item[0], reverse=True)
+    notes.sort(key=lambda item: (-item[0], len(item[1]["question"])))
     return "\n\n".join(
         f"Question: {exemple['question']}\n{exemple['sql']}"
         for _note, exemple in notes[:nombre]
@@ -93,10 +95,10 @@ def exemples() -> list[dict]:
 
 
 def demande_liste(question: str) -> bool:
-    texte = " ".join(_radical(mot) for mot in norm(question).split())
-    if any(mot in texte for mot in ("total", "combien", "moyenne", "somme", "nombre")):
+    mots = {_radical(mot) for mot in norm(question).split()}
+    if mots & {"total", "combien", "moyenne", "somme", "nombre", "montant"}:
         return False
-    return any(mot in texte for mot in ("liste", "detail", "dernier", "facture", "ordonnance"))
+    return bool(mots & {"liste", "detail", "montre", "afficher"})
 
 
 def valider(requete: str, identifiants: bool = False) -> str:

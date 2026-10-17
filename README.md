@@ -11,7 +11,7 @@ docker compose up --build
 
 Puis ouvrir `http://localhost:8000/health`. La réponse attendue contient `"status": "ok"` et `"model_version": "mock-0.1"`.
 
-n8n écoute sur `http://localhost:5678`. Le workflow d'alerte s'importe selon `docs/04-workflow/fiche-alerte.md`.
+n8n écoute sur `http://localhost:5678`. Le workflow d'alerte s'importe selon `docs/04-workflow/fiche-alerte.md`. Superset écoute sur `http://localhost:8088` et lit le schéma `bi`.
 
 ## Ce que la pile contient
 
@@ -22,6 +22,7 @@ n8n écoute sur `http://localhost:5678`. Le workflow d'alerte s'importe selon `d
 - API FastAPI, rôle `prediccare_app`
 - seuil d'alerte dans `app.settings`, initialisé depuis `ALERT_THRESHOLD`
 - n8n
+- Superset, sur les vues du schéma `bi`
 
 Les pièces de conformité sont dans `docs/02-conformite/` et la matrice des rôles dans `docs/05-api/matrice-roles.md`.
 

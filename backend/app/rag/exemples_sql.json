@@ -12,8 +12,64 @@
     "sql": "SELECT f.facture_id, f.statut, f.type_facture, f.montant_total, f.montant_pris_en_charge, f.reste_a_charge, f.motif_rejet, f.date_soin, f.date_facture, p.nom AS prestataire, l.num_ligne, l.code, l.type_ligne, l.quantite, l.prix_unitaire, l.montant FROM clean.dossier_factures AS f LEFT JOIN clean.prestataires AS p ON p.prestataire_id = f.prestataire_id LEFT JOIN clean.dossier_lignes AS l ON l.facture_id = f.facture_id WHERE f.facture_id = (SELECT facture_id FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 1) ORDER BY l.num_ligne"
   },
   {
+    "question": "Quel est le montant de ma dernière facture ?",
+    "sql": "SELECT montant_total, montant_pris_en_charge, reste_a_charge, statut, date_soin FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 1"
+  },
+  {
     "question": "Quel est le montant de ma dernière facture du 12/05/2026 et son statut ?",
     "sql": "SELECT facture_id, statut, montant_total, montant_pris_en_charge, reste_a_charge, date_soin FROM clean.dossier_factures WHERE date_soin = DATE '2026-05-12' ORDER BY date_soin DESC NULLS LAST LIMIT 1"
+  },
+  {
+    "question": "Ma dernière facture est-elle payée ?",
+    "sql": "SELECT statut, montant_total, montant_pris_en_charge, reste_a_charge, date_soin FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 1"
+  },
+  {
+    "question": "Quelle est la date de mon dernier soin ?",
+    "sql": "SELECT date_soin, type_facture, statut, montant_total FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 1"
+  },
+  {
+    "question": "Ai-je des factures en cours ?",
+    "sql": "SELECT facture_id, type_facture, montant_total, date_soin FROM clean.dossier_factures WHERE statut = 'EN_COURS' ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Combien ai-je dépensé en laboratoire ?",
+    "sql": "SELECT COALESCE(SUM(montant_total), 0) AS total, COALESCE(SUM(montant_pris_en_charge), 0) AS pris_en_charge, COUNT(*) AS nombre FROM clean.dossier_factures WHERE type_facture = 'LABORATOIRE'"
+  },
+  {
+    "question": "Liste mes consultations",
+    "sql": "SELECT facture_id, statut, montant_total, date_soin FROM clean.dossier_factures WHERE type_facture = 'CONSULTATION' ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Liste mes factures d'optique",
+    "sql": "SELECT facture_id, statut, montant_total, date_soin FROM clean.dossier_factures WHERE type_facture = 'OPTIQUE' ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Liste mes factures dentaires",
+    "sql": "SELECT facture_id, statut, montant_total, date_soin FROM clean.dossier_factures WHERE type_facture = 'DENTAIRE' ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Liste mes factures d'hospitalisation",
+    "sql": "SELECT facture_id, statut, montant_total, date_soin FROM clean.dossier_factures WHERE type_facture = 'HOSPITALISATION' ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Depuis quand suis-je assuré ?",
+    "sql": "SELECT date_adhesion, date_radiation, ville, tranche_age, sexe, contrat_id FROM clean.dossier_assures LIMIT 1"
+  },
+  {
+    "question": "Quelles ordonnances sont encore valides ?",
+    "sql": "SELECT ordonnance_id, date_prescription, validite_jours FROM clean.dossier_ordonnances WHERE date_prescription + validite_jours >= CURRENT_DATE ORDER BY date_prescription DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Quelles factures mon établissement a-t-il émises ?",
+    "sql": "SELECT facture_id, statut, type_facture, montant_total, date_soin FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Combien de factures sont en attente pour mon établissement ?",
+    "sql": "SELECT COUNT(*) AS nombre, COALESCE(SUM(montant_total), 0) AS total FROM clean.dossier_factures WHERE statut = 'EN_COURS'"
+  },
+  {
+    "question": "Quelles ordonnances ai-je prescrites ?",
+    "sql": "SELECT ordonnance_id, date_prescription, validite_jours FROM clean.dossier_ordonnances ORDER BY date_prescription DESC NULLS LAST LIMIT 8"
   },
   {
     "question": "Quel est mon profil d'assuré ?",

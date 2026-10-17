@@ -21,7 +21,12 @@
         {"nom": "montant_pris_en_charge", "type": "bigint", "description": "Part payée par l'assurance."},
         {"nom": "reste_a_charge", "type": "bigint", "description": "Part qui reste à l'assuré."},
         {"nom": "statut", "type": "text", "description": "État du dossier.", "valeurs": ["PAYEE", "EN_COURS", "REJETEE"]},
-        {"nom": "motif_rejet", "type": "text", "description": "Motif si la facture est rejetée."}
+        {
+          "nom": "motif_rejet",
+          "type": "text",
+          "description": "Motif si la facture est rejetée, vide sinon.",
+          "valeurs": ["CONTROLE_MEDICAL", "PIECE_MANQUANTE_ATTESTATION", "ORDONNANCE_PERIMEE", "DELAI_DE_CARENCE", "HORS_PERIODE_COUVERTURE", "PLAFOND_ATTEINT", "ENTENTE_PREALABLE_ABSENTE", "PRODUIT_NON_REMBOURSABLE"]
+        }
       ]
     },
     {
@@ -31,7 +36,7 @@
         {"nom": "facture_id", "type": "text", "description": "Facture de la ligne."},
         {"nom": "num_ligne", "type": "integer", "description": "Numéro de ligne."},
         {"nom": "code", "type": "text", "description": "Code acte ou médicament."},
-        {"nom": "type_ligne", "type": "text", "description": "ACTE ou MEDICAMENT."},
+        {"nom": "type_ligne", "type": "text", "description": "Nature de la ligne.", "valeurs": ["ACTE", "MEDICAMENT"]},
         {"nom": "quantite", "type": "numeric", "description": "Quantité."},
         {"nom": "prix_unitaire", "type": "bigint", "description": "Prix unitaire en ariary."},
         {"nom": "montant", "type": "bigint", "description": "Montant de la ligne en ariary."}
@@ -80,7 +85,7 @@
         {"nom": "formule", "type": "text", "description": "Formule.", "valeurs": ["ESSENTIEL", "CONFORT", "PREMIUM"]},
         {"nom": "date_effet", "type": "date", "description": "Date d'effet."},
         {"nom": "date_fin", "type": "date", "description": "Date de fin."},
-        {"nom": "statut", "type": "text", "description": "Statut du contrat."}
+        {"nom": "statut", "type": "text", "description": "Statut du contrat.", "valeurs": ["ACTIF", "RESILIE"]}
       ]
     },
     {
@@ -89,9 +94,14 @@
       "colonnes": [
         {"nom": "prestataire_id", "type": "text", "description": "Identifiant d'établissement."},
         {"nom": "nom", "type": "text", "description": "Nom à afficher."},
-        {"nom": "type_prestataire", "type": "text", "description": "Type d'établissement."},
+        {
+          "nom": "type_prestataire",
+          "type": "text",
+          "description": "Type d'établissement.",
+          "valeurs": ["PHARMACIE", "CABINET_SPECIALISTE", "CABINET_GENERALISTE", "CABINET_DENTAIRE", "CLINIQUE", "OPTICIEN", "LABORATOIRE", "CENTRE_IMAGERIE", "MATERNITE", "CABINET_KINE"]
+        },
         {"nom": "ville", "type": "text", "description": "Ville."},
-        {"nom": "statut", "type": "text", "description": "Statut de l'établissement."}
+        {"nom": "statut", "type": "text", "description": "Statut de l'établissement.", "valeurs": ["ACTIF", "RADIE"]}
       ]
     },
     {
