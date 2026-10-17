@@ -1,0 +1,202 @@
+Assistant PrediCare — étapes pour les réponses SQL
+État de départ : fin de l'étape 33 (routage par mots-clés, liste fixe de 8 factures).
+Le pipeline où le modèle écrivait le SQL librement a été retiré (étape 35).
+On le reconstruit avec des outils, pas avec une liste de mots en dur.
+
+But
+---
+Llama 3.2 (Ollama) choisit lui-même l'outil selon la question :
+
+  search_documents  recherche vectorielle déjà en place (PDF, pgvector)
+  query_database    question en français -> SQL -> résultat brut -> phrase
+
+Le modèle ne reçoit plus les extraits PDF à chaque question. Il appelle
+l'outil dont il a besoin. Une question peut appeler les deux
+(« ma facture dépasse-t-elle le plafond ? »).
+
+
+1. Architecture : Retrieval-as-Tool
+-------------------------------
+Rester dans l'assistant FastAPI existant (backend/app/services/assistant.py).
+Pas de second écran, pas de Chainlit, pas d'appel à un modèle externe :
+les factures restent sur Ollama.
+
+Ollama expose le function calling natif sur POST /api/chat, champ "tools".
+Llama 3.2 3B est le modèle déjà configuré (OLLAMA_MODEL). La 3B est le
+minimum raisonnable pour écrire du SQL ; ne pas descendre sur la 1B.
+
+Deux outils déclarés au modèle :
+
+  search_documents(question)
+      Réutilise _chercher : embedding nomic-embed-text, filtres de rôle,
+      formule de l'assuré, conditions particulières du seul contrat du jeton.
+
+  query_database(question)
+      Sous-agent Text-to-SQL décrit à l'étape 2.
+      L'argument est la question, jamais un identifiant de compte.
+
+Boucle agent, 4 tours maximum :
+  1. Le modèle répond soit par du texte, soit par un ou deux tool_calls.
+  2. Le code exécute l'outil et renvoie le résultat comme message "tool".
+  3. Le modèle reformule en français.
+  4. S'il n'appelle aucun outil, la réponse textuelle est renvoyée telle quelle.
+
+Le routage par mots-clés de app/rag/route.py (étape 33) reste le filet
+tant que le tool calling n'est pas mesuré. Il ne décide plus la source
+une fois les outils validés. Il continue d'interdire au gestionnaire et
+à l'administrateur d'ouvrir le dossier d'une autre personne.
+
+
+2. Text-to-SQL
+--------------
+query_database ne passe pas la question telle quelle à PostgreSQL.
+
+  a. Schéma
+     Un document (JSON, le YAML n'est pas installable ici sans compilateur C)
+     décrit uniquement les vues autorisées, en français :
+     colonnes, types, valeurs possibles (statut PAYEE | EN_COURS | REJETEE,
+     type_facture CONSULTATION | PHARMACIE | ...).
+     Vues, pas les tables brutes :
+       clean.dossier_factures          en-tête, sans assure_id
+       clean.dossier_lignes            lignes
+       clean.dossier_ordonnances
+       clean.dossier_ordonnance_lignes
+       clean.prestataires              nom de l'établissement
+       clean.referentiel_actes
+       clean.referentiel_medicaments
+     Les vues sont security_invoker : la politique de ligne du rôle
+     prediccare_agent s'applique en dessous.
+     Le prompt SQL contient ce schéma et 4 exemples proches de la question.
+     Choisir les exemples par similarité d'embedding (nomic-embed-text),
+     pas par intersection de mots. L'intersection a déjà confondu
+     « lister mes facture » avec un SUM/COUNT.
+
+  b. Garde-fou avant exécution
+     Parser avec SQLGlot (dialecte postgres). Refuser si :
+       - plus d'une instruction ;
+       - racine autre que SELECT / UNION ;
+       - INSERT, UPDATE, DELETE, DROP, CREATE, SET, set_config,
+         current_setting, ou toute fonction pg_* ;
+       - table hors liste blanche ;
+       - SELECT * ;
+       - littéral 'ASS-', 'PRE-' ou 'CTR-' (identifiant de compte).
+     Ajouter LIMIT 50 si le modèle n'en a pas mis. Plafonner un LIMIT
+     plus grand à 50.
+     Une requête refusée n'est jamais envoyée à la base.
+
+  c. Exécution
+     Connexion séparée, utilisateur prediccare_agent (SELECT seulement).
+     statement_timeout 10 s, lu dans la configuration
+     (AGENT_STATEMENT_TIMEOUT_MS), pas écrit en dur dans le flux métier.
+     Avant la requête :
+       SELECT set_config('prediccare.assure_id', <jeton>, true);
+       SELECT set_config('prediccare.prestataire_id', <jeton>, true);
+     Une seule des deux valeurs est non vide, selon le rôle.
+     Les deux vides : ne pas appeler l'outil (gestionnaire, administrateur).
+
+  d. Boucle de correction
+     Au plus 3 essais.
+     Refus du garde-fou ou erreur SQL (colonne inconnue, syntaxe) :
+     renvoyer le motif court au modèle et redemander un SELECT.
+     Après 3 échecs : ne pas dire « aucun dossier ». Dire que la lecture
+     a échoué, et ne pas mettre cette réponse en cache.
+     Annulation pour délai dépassé : même traitement, motif « délai dépassé ».
+
+
+3. Routage attendu
+------------------
+Le modèle choisit. Exemples de contrôle, à transformer en tests :
+
+  « Quelles sont les conditions de remboursement ? »
+      search_documents seulement. Aucun SQL.
+
+  « Peux-tu me lister mes factures ? »
+      query_database. Le SQL liste des lignes
+      (facture_id, statut, type, montant, date), pas un SUM/COUNT.
+      C'est le cas qui a échoué la fois précédente.
+
+  « Quel est le montant de ma dernière facture du 12/05/2026
+    et son statut ? »
+      query_database. Le SQL filtre la date, ordonne, limite à 1,
+      et joint les lignes si la question demande le détail.
+      Le WHERE sur l'assuré n'est pas écrit par le modèle :
+      il vient de la session (étape 4).
+
+  « Ma facture dépasse-t-elle le plafond ? »
+      les deux outils. Le montant vient du SQL, le plafond du PDF.
+      Le modèle ne mélange pas les formules ESSENTIEL / CONFORT / PREMIUM.
+
+  « Où en est ma facture de ASS-999 ? » avec un jeton ASS-1
+      query_database. Le SQL exécuté ne contient pas ASS-999.
+      Les paramètres de session valent ASS-1.
+
+
+4. Identité — point bloquant
+----------------------------
+Le modèle ne devine pas l'assuré ni l'établissement.
+
+  - L'identifiant vient du jeton (Principal.assure_id ou
+    Principal.prestataire_id), jamais du corps de la question.
+  - Il est posé par set_config avant le SELECT. Les politiques de ligne
+    filtrent même si le modèle ajoute OR true.
+  - Un littéral ASS- / PRE- / CTR- dans le SQL est refusé pour un assuré
+    et un prestataire. L'administrateur peut le citer.
+  - Prestataire : seulement les factures et ordonnances de son établissement.
+  - Administrateur : les mêmes vues, sans filtre de ligne, donc toute la
+    base dossier (factures, lignes, ordonnances, assurés, contrats,
+    établissements, référentiels). Pas le coffre, pas raw, pas labels.
+    Il peut citer un identifiant dans la requête.
+  - Gestionnaire : query_database n'est pas proposé.
+  - Pas de CIN, pas de coffre, pas de labels, pas de raw.
+
+
+5. Ce qu'on branche, et ce qu'on ne branche pas
+-----------------------------------------------
+Déjà là, à réutiliser :
+  PostgreSQL 16 + pgvector
+  Ollama llama3.2 et nomic-embed-text
+  Rôle prediccare_agent et politiques agent_assure
+  Recherche PDF, glossaire, filtre de formule
+  Cache app.assistant_cache (le vider à chaque changement de prompt)
+
+À ajouter :
+  SQLGlot dans backend/requirements.txt
+  Schéma + exemples des vues
+  Vues clean.dossier_* (security_invoker) et droits SELECT du rôle agent
+  Boucle d'outils dans assistant.py
+  Affichage de la requête vérifiée sur l'écran assistant
+    (élément replié, la phrase reste le contenu principal)
+
+Pas dans cette passe :
+  LangChain, LlamaIndex, SQLAlchemy comme nouvelle couche
+  (l'exécution reste en psycopg, requêtes paramétrées)
+  Chainlit, Langfuse, Ragas
+  Claude ou tout modèle hors de la machine
+  Réindexation du corpus
+
+
+6. Ordre de travail
+-------------------
+Ne pas mélanger les deux outils tant que le SQL n'est pas juste.
+
+  1. Vues, droits, timeout, politiques (assuré et prestataire).
+     Vérifier à la main : sans set_config, 0 ligne ;
+     avec l'assuré du jeton, seulement ses factures.
+  2. Garde-fou SQLGlot + tests (DELETE, autre schéma, SELECT *,
+     identifiant de compte, set_config, LIMIT).
+  3. query_database seul, sur un jeu d'une vingtaine de questions
+     dont « lister mes factures » et « détail de la dernière facture ».
+     La requête attendue est connue. On compare le SQL validé, pas
+     seulement la phrase du modèle.
+  4. Boucle de correction (3 essais) et absence de cache en cas d'échec.
+  5. Seulement ensuite, déclarer search_documents à côté et laisser
+     le modèle choisir. Rejouer les tests de routage de l'étape 33.
+  6. Vider app.assistant_cache.
+  7. Reconstruire l'image api sans relancer migrate
+     (alembic_version est encore 005_flux) :
+     docker compose up -d --no-deps --build api
+
+Critère pour dire que c'est stable :
+  une question de liste renvoie des factures (identifiant, statut,
+  montant, date), pas un total, et pas la phrase « je ne trouve pas »
+  alors que le compte a des factures.

@@ -30,7 +30,7 @@ export default function Page() {
       <div>
         <h1 className="text-4xl">Assistant</h1>
         <p className="mt-2 text-sm text-ink/70">
-          Une question de garantie lit les contrats. Une question de dossier lit les factures du compte connecté.
+          Une question de garantie lit les contrats. Une question de dossier interroge les factures du compte connecté : le sien pour un assuré ou un établissement, toute la base dossier pour un administrateur.
           Un assuré reçoit les conditions générales de sa formule, pas celles des autres. Une question qui cherche à
           sortir de ce périmètre est refusée.
         </p>
@@ -59,6 +59,12 @@ export default function Page() {
                   </li>
                 ))}
               </ul>
+            ) : null}
+            {reponse.data.requete ? (
+              <details className="text-ink/70">
+                <summary>Requête vérifiée</summary>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{String(reponse.data.requete)}</pre>
+              </details>
             ) : null}
             {reponse.data.cache ? <p className="text-ink/50">Réponse reprise du cache.</p> : null}
           </div>

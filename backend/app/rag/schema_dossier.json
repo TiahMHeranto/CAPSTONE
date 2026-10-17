@@ -1,0 +1,116 @@
+{
+  "tables": [
+    {
+      "nom": "clean.dossier_factures",
+      "description": "Factures visibles selon le jeton. L'assuré et le prestataire ne voient que leur compte. L'administrateur voit toutes les factures. Ne pas écrire un identifiant ASS-, PRE- ou CTR- sauf si le rôle est administrateur.",
+      "colonnes": [
+        {"nom": "facture_id", "type": "text", "description": "Identifiant de la facture."},
+        {"nom": "assure_id", "type": "text", "description": "Pseudonyme de l'assuré. Déjà filtré pour un assuré."},
+        {"nom": "prestataire_id", "type": "text", "description": "Établissement, à joindre à clean.prestataires."},
+        {"nom": "ordonnance_id", "type": "text", "description": "Ordonnance liée, vide s'il n'y en a pas."},
+        {"nom": "contrat_id", "type": "text", "description": "Contrat porté par la facture."},
+        {
+          "nom": "type_facture",
+          "type": "text",
+          "description": "Nature du soin.",
+          "valeurs": ["CONSULTATION", "PHARMACIE", "LABORATOIRE", "IMAGERIE", "DENTAIRE", "KINESITHERAPIE", "MATERNITE", "OPTIQUE", "HOSPITALISATION"]
+        },
+        {"nom": "date_soin", "type": "date", "description": "Date du soin."},
+        {"nom": "date_facture", "type": "date", "description": "Date de la facture."},
+        {"nom": "montant_total", "type": "bigint", "description": "Montant total en ariary."},
+        {"nom": "montant_pris_en_charge", "type": "bigint", "description": "Part payée par l'assurance."},
+        {"nom": "reste_a_charge", "type": "bigint", "description": "Part qui reste à l'assuré."},
+        {"nom": "statut", "type": "text", "description": "État du dossier.", "valeurs": ["PAYEE", "EN_COURS", "REJETEE"]},
+        {"nom": "motif_rejet", "type": "text", "description": "Motif si la facture est rejetée."}
+      ]
+    },
+    {
+      "nom": "clean.dossier_lignes",
+      "description": "Lignes des factures visibles. Pour un détail, joindre toutes les lignes de la facture choisie.",
+      "colonnes": [
+        {"nom": "facture_id", "type": "text", "description": "Facture de la ligne."},
+        {"nom": "num_ligne", "type": "integer", "description": "Numéro de ligne."},
+        {"nom": "code", "type": "text", "description": "Code acte ou médicament."},
+        {"nom": "type_ligne", "type": "text", "description": "ACTE ou MEDICAMENT."},
+        {"nom": "quantite", "type": "numeric", "description": "Quantité."},
+        {"nom": "prix_unitaire", "type": "bigint", "description": "Prix unitaire en ariary."},
+        {"nom": "montant", "type": "bigint", "description": "Montant de la ligne en ariary."}
+      ]
+    },
+    {
+      "nom": "clean.dossier_ordonnances",
+      "description": "Ordonnances visibles selon le jeton.",
+      "colonnes": [
+        {"nom": "ordonnance_id", "type": "text", "description": "Identifiant de l'ordonnance."},
+        {"nom": "assure_id", "type": "text", "description": "Pseudonyme de l'assuré."},
+        {"nom": "prescripteur_id", "type": "text", "description": "Prescripteur, à joindre à clean.prestataires."},
+        {"nom": "date_prescription", "type": "date", "description": "Date de prescription."},
+        {"nom": "validite_jours", "type": "integer", "description": "Durée de validité en jours."}
+      ]
+    },
+    {
+      "nom": "clean.dossier_ordonnance_lignes",
+      "description": "Lignes d'ordonnance : code et quantité, sans diagnostic.",
+      "colonnes": [
+        {"nom": "ordonnance_id", "type": "text", "description": "Ordonnance de la ligne."},
+        {"nom": "num_ligne", "type": "integer", "description": "Numéro de ligne."},
+        {"nom": "code", "type": "text", "description": "Code prescrit."},
+        {"nom": "quantite", "type": "numeric", "description": "Quantité prescrite."}
+      ]
+    },
+    {
+      "nom": "clean.dossier_assures",
+      "description": "Profil du compte sans nom ni CIN. L'assuré ne voit que sa ligne. L'administrateur voit toute la population.",
+      "colonnes": [
+        {"nom": "assure_id", "type": "text", "description": "Pseudonyme."},
+        {"nom": "contrat_id", "type": "text", "description": "Contrat."},
+        {"nom": "rang_beneficiaire", "type": "text", "description": "Lien familial.", "valeurs": ["ASSURE_PRINCIPAL", "CONJOINT", "ENFANT"]},
+        {"nom": "sexe", "type": "text", "description": "Sexe."},
+        {"nom": "tranche_age", "type": "text", "description": "Tranche d'âge, sans date de naissance."},
+        {"nom": "ville", "type": "text", "description": "Ville."},
+        {"nom": "date_adhesion", "type": "date", "description": "Date d'adhésion."},
+        {"nom": "date_radiation", "type": "date", "description": "Date de radiation, vide si le compte est ouvert."}
+      ]
+    },
+    {
+      "nom": "clean.dossier_contrats",
+      "description": "Contrats visibles. L'assuré ne voit que le sien. L'administrateur voit tous les contrats.",
+      "colonnes": [
+        {"nom": "contrat_id", "type": "text", "description": "Identifiant du contrat."},
+        {"nom": "formule", "type": "text", "description": "Formule.", "valeurs": ["ESSENTIEL", "CONFORT", "PREMIUM"]},
+        {"nom": "date_effet", "type": "date", "description": "Date d'effet."},
+        {"nom": "date_fin", "type": "date", "description": "Date de fin."},
+        {"nom": "statut", "type": "text", "description": "Statut du contrat."}
+      ]
+    },
+    {
+      "nom": "clean.prestataires",
+      "description": "Annuaire des établissements. Le statut ici est celui de l'établissement, pas d'une facture.",
+      "colonnes": [
+        {"nom": "prestataire_id", "type": "text", "description": "Identifiant d'établissement."},
+        {"nom": "nom", "type": "text", "description": "Nom à afficher."},
+        {"nom": "type_prestataire", "type": "text", "description": "Type d'établissement."},
+        {"nom": "ville", "type": "text", "description": "Ville."},
+        {"nom": "statut", "type": "text", "description": "Statut de l'établissement."}
+      ]
+    },
+    {
+      "nom": "clean.referentiel_actes",
+      "description": "Libellés des actes.",
+      "colonnes": [
+        {"nom": "code_acte", "type": "text", "description": "Code, à joindre à dossier_lignes.code."},
+        {"nom": "libelle", "type": "text", "description": "Libellé de l'acte."},
+        {"nom": "categorie", "type": "text", "description": "Catégorie."}
+      ]
+    },
+    {
+      "nom": "clean.referentiel_medicaments",
+      "description": "Libellés des médicaments.",
+      "colonnes": [
+        {"nom": "code_medicament", "type": "text", "description": "Code, à joindre à dossier_lignes.code."},
+        {"nom": "libelle", "type": "text", "description": "Libellé du médicament."},
+        {"nom": "remboursable", "type": "boolean", "description": "Vrai si le médicament est remboursable."}
+      ]
+    }
+  ]
+}

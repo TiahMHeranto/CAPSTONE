@@ -1,0 +1,66 @@
+[
+  {
+    "question": "Peux-tu me lister mes factures ?",
+    "sql": "SELECT facture_id, statut, type_facture, montant_total, date_soin FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Où en est ma facture ?",
+    "sql": "SELECT facture_id, statut, type_facture, montant_total, reste_a_charge, date_soin FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Donne-moi le détail de ma dernière facture",
+    "sql": "SELECT f.facture_id, f.statut, f.type_facture, f.montant_total, f.montant_pris_en_charge, f.reste_a_charge, f.motif_rejet, f.date_soin, f.date_facture, p.nom AS prestataire, l.num_ligne, l.code, l.type_ligne, l.quantite, l.prix_unitaire, l.montant FROM clean.dossier_factures AS f LEFT JOIN clean.prestataires AS p ON p.prestataire_id = f.prestataire_id LEFT JOIN clean.dossier_lignes AS l ON l.facture_id = f.facture_id WHERE f.facture_id = (SELECT facture_id FROM clean.dossier_factures ORDER BY date_soin DESC NULLS LAST LIMIT 1) ORDER BY l.num_ligne"
+  },
+  {
+    "question": "Quel est le montant de ma dernière facture du 12/05/2026 et son statut ?",
+    "sql": "SELECT facture_id, statut, montant_total, montant_pris_en_charge, reste_a_charge, date_soin FROM clean.dossier_factures WHERE date_soin = DATE '2026-05-12' ORDER BY date_soin DESC NULLS LAST LIMIT 1"
+  },
+  {
+    "question": "Quel est mon profil d'assuré ?",
+    "sql": "SELECT rang_beneficiaire, sexe, tranche_age, ville, date_adhesion, contrat_id FROM clean.dossier_assures"
+  },
+  {
+    "question": "Quel est mon contrat ?",
+    "sql": "SELECT contrat_id, formule, statut, date_effet, date_fin FROM clean.dossier_contrats"
+  },
+  {
+    "question": "Quel est le montant total de mes factures ?",
+    "sql": "SELECT COALESCE(SUM(montant_total), 0) AS total, COUNT(*) AS nombre FROM clean.dossier_factures"
+  },
+  {
+    "question": "Quelles factures ont été rejetées ?",
+    "sql": "SELECT facture_id, motif_rejet, montant_total, date_soin FROM clean.dossier_factures WHERE statut = 'REJETEE' ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Quel est mon reste à charge ?",
+    "sql": "SELECT COALESCE(SUM(reste_a_charge), 0) AS reste_a_charge, COALESCE(SUM(montant_pris_en_charge), 0) AS pris_en_charge FROM clean.dossier_factures"
+  },
+  {
+    "question": "Liste mes factures de pharmacie",
+    "sql": "SELECT facture_id, statut, montant_total, date_soin FROM clean.dossier_factures WHERE type_facture = 'PHARMACIE' ORDER BY date_soin DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Combien de factures par statut ?",
+    "sql": "SELECT statut, COUNT(*) AS nombre, COALESCE(SUM(montant_total), 0) AS total FROM clean.dossier_factures GROUP BY statut ORDER BY statut"
+  },
+  {
+    "question": "Quel établissement revient le plus souvent ?",
+    "sql": "SELECT p.nom AS prestataire, COUNT(*) AS nombre FROM clean.dossier_factures AS f LEFT JOIN clean.prestataires AS p ON p.prestataire_id = f.prestataire_id GROUP BY p.nom ORDER BY nombre DESC LIMIT 5"
+  },
+  {
+    "question": "Montre mes ordonnances récentes",
+    "sql": "SELECT ordonnance_id, date_prescription, validite_jours FROM clean.dossier_ordonnances ORDER BY date_prescription DESC NULLS LAST LIMIT 8"
+  },
+  {
+    "question": "Qui a prescrit ma dernière ordonnance ?",
+    "sql": "SELECT o.ordonnance_id, o.date_prescription, p.nom AS prescripteur FROM clean.dossier_ordonnances AS o LEFT JOIN clean.prestataires AS p ON p.prestataire_id = o.prescripteur_id ORDER BY o.date_prescription DESC NULLS LAST LIMIT 1"
+  },
+  {
+    "question": "Combien d'assurés par ville ?",
+    "sql": "SELECT ville, COUNT(*) AS nombre FROM clean.dossier_assures GROUP BY ville ORDER BY nombre DESC LIMIT 20"
+  },
+  {
+    "question": "Combien de contrats par formule ?",
+    "sql": "SELECT formule, COUNT(*) AS nombre FROM clean.dossier_contrats GROUP BY formule ORDER BY formule"
+  }
+]

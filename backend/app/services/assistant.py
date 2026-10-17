@@ -10,9 +10,16 @@ import psycopg
 
 from app.config import settings
 from app.core.tokens import Principal
-from app.db.session import ouvrir
+from app.db.session import ouvrir, ouvrir_agent
 from app.rag.glossaire import formule_recherche, texte_recherche
 from app.rag.route import intention
+from app.rag.sql_guard import (
+    RequeteRefusee,
+    demande_liste,
+    exemples_proches,
+    texte_schema,
+    valider,
+)
 from app.services.comptes import fiche_connectee
 from app.services.registry import ModeleIndisponible
 
@@ -51,25 +58,32 @@ def repondre(question: str, principal: Principal) -> tuple[int, dict]:
                 return 200, cache
             fiche = fiche_connectee(connection, principal)
             formule = formule_recherche(principal.role, question, _formule_fiche(fiche))
+            outils = _outils_autorises(choisir_outils(question, principal.role), principal.role)
             extraits: list[dict] = []
-            if voie in {"contrat", "les_deux"}:
+            historique = None
+            requete_sql = None
+            echec = False
+            if "search_documents" in outils:
                 contrat = _contrat(connection, assure) if principal.role == "assure" else None
                 extraits = _chercher(connection, vecteur, principal.role, contrat, formule)
-            historique = None
-            if voie in {"dossier", "les_deux"}:
-                historique = _dossier(connection, principal)
+            if "query_database" in outils:
+                historique, requete_sql, echec = interroger(connection, principal, question)
             texte = generer(question, extraits, historique, fiche)
             sources = _sources(extraits, historique)
-            _ecrire_cache(
-                connection, principal.role, assure, question, vecteur, texte, sources, voie
-            )
+            if not echec:
+                _ecrire_cache(
+                    connection, principal.role, assure, question, vecteur, texte, sources, voie
+                )
             connection.commit()
     except ModeleIndisponible:
         return 503, {"code": "MODELE_INDISPONIBLE", "motif": "assistant indisponible"}
     except psycopg.Error as exc:
         logger.warning("assistant erreur=%s", type(exc).__name__)
         return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
-    return 200, {"reponse": texte, "sources": sources, "cache": False}
+    corps = {"reponse": texte, "sources": sources, "cache": False}
+    if requete_sql:
+        corps["requete"] = requete_sql
+    return 200, corps
 
 
 def embarquer(texte: str) -> list[float]:
@@ -92,17 +106,7 @@ def generer(
     blocs = []
     for extrait in extraits:
         blocs.append(f"[{extrait['source']} p.{extrait['page']}] {extrait['contenu']}")
-    if historique is None:
-        dossier = "(historique non consulte)"
-    elif not historique:
-        dossier = "(aucun dossier pour le compte connecte)"
-    else:
-        dossier = "\n".join(
-            f"{ligne['facture_id']} statut {ligne['statut']} "
-            f"type {ligne['type_facture']} montant {ligne['montant_total']} "
-            f"soin {ligne['date_soin']} ordonnance {ligne['ordonnance_id'] or '-'}"
-            for ligne in historique
-        )
+    dossier = _texte_historique(historique)
     message = (
         "Extraits:\n"
         + ("\n".join(blocs) if blocs else "(aucun extrait)")
@@ -129,10 +133,12 @@ def generer(
                         "d'une autre formule. Pour les autres roles, si les "
                         "valeurs different entre ESSENTIEL, CONFORT et PREMIUM, "
                         "donne chaque formule. Cite le nom du document. "
-                        "Un statut ou un montant de facture vient de "
-                        "l'historique : cite son identifiant. Une regle ou un "
-                        "plafond vient des extraits. Si l'information manque, "
-                        "dis que tu ne la trouves pas. N'invente pas un montant."
+                        "Si l'historique liste des factures, recopie "
+                        "l'identifiant, le statut, le montant et la date. "
+                        "Si l'historique est un total ou un nombre, cite ces "
+                        "chiffres. Une regle ou un plafond vient des extraits. "
+                        "Si l'information manque, dis que tu ne la trouves pas. "
+                        "N'invente pas un montant."
                     ),
                 },
                 {"role": "user", "content": message},
@@ -237,44 +243,222 @@ def _chercher(
     return [{"source": row[0], "page": row[1], "contenu": row[2]} for row in rows]
 
 
-def _dossier(connection, principal: Principal) -> list[dict]:
-    if principal.role == "assure" and principal.assure_id:
-        colonne, valeur = "assure_id", principal.assure_id
-    elif principal.role == "prestataire" and principal.prestataire_id:
-        colonne, valeur = "prestataire_id", principal.prestataire_id
-    else:
-        return []
-    rows = connection.execute(
-        f"""
-        SELECT facture_id, statut, type_facture, montant_total,
-               date_soin::text, ordonnance_id
-        FROM (
-            SELECT facture_id, statut, type_facture, montant_total,
-                   date_soin, ordonnance_id
-            FROM clean.factures
-            WHERE {colonne} = %s
-            UNION ALL
-            SELECT facture_id, statut, type_facture, montant_total,
-                   date_soin, ordonnance_id
-            FROM app.factures
-            WHERE {colonne} = %s
-        ) AS dossier
-        ORDER BY date_soin DESC NULLS LAST
-        LIMIT 8
-        """,
-        (valeur, valeur),
-    ).fetchall()
-    return [
+def _texte_historique(historique: list[dict] | None) -> str:
+    if historique is None:
+        return "(historique non consulte)"
+    if not historique:
+        return "(aucun dossier pour le compte connecte)"
+    if historique[0].get("lecture") == "impossible":
+        return "(le dossier n'a pas pu etre lu)"
+    return "\n".join(_ligne_historique(ligne) for ligne in historique)
+
+
+def _ligne_historique(ligne: dict) -> str:
+    morceaux = []
+    for cle, valeur in ligne.items():
+        morceaux.append(f"{cle} {valeur if valeur is not None else '-'}")
+    return " | ".join(morceaux)
+
+
+_OUTILS = (
+    {
+        "type": "function",
+        "function": {
+            "name": "search_documents",
+            "description": (
+                "Garanties, plafonds, carence, reseau de soins et pieces a fournir, "
+                "dans les contrats PDF."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"question": {"type": "string"}},
+                "required": ["question"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_database",
+            "description": (
+                "Factures, ordonnances, montants, statuts, profil et contrat "
+                "deja limites au jeton. Pour l'administrateur, toute la base dossier."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"question": {"type": "string"}},
+                "required": ["question"],
+            },
+        },
+    },
+)
+
+
+def choisir_outils(question: str, role: str) -> list[str]:
+    outils = _OUTILS if role != "gestionnaire" else _OUTILS[:1]
+    corps = _ollama(
+        "/api/chat",
         {
-            "facture_id": row[0],
-            "statut": row[1],
-            "type_facture": row[2],
-            "montant_total": row[3],
-            "date_soin": row[4],
-            "ordonnance_id": row[5],
-        }
-        for row in rows
+            "model": settings.ollama_model,
+            "stream": False,
+            "tools": outils,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Tu choisis un outil. search_documents pour une garantie "
+                        "ou un plafond. query_database pour une facture, un montant, "
+                        "un statut, une ordonnance ou le profil. Les deux si la "
+                        "question melange les deux. Pour lister des factures, "
+                        "query_database, pas un total."
+                    ),
+                },
+                {"role": "user", "content": question},
+            ],
+        },
+    )
+    noms = []
+    for appel in (corps.get("message") or {}).get("tool_calls") or []:
+        fonction = appel.get("function") or {}
+        nom = fonction.get("name")
+        if nom in {"search_documents", "query_database"} and nom not in noms:
+            noms.append(nom)
+    if noms:
+        return noms
+    return _filet(question, role)
+
+
+def _filet(question: str, role: str) -> list[str]:
+    voie = intention(question)
+    noms = []
+    if voie in {"contrat", "les_deux"}:
+        noms.append("search_documents")
+    if voie in {"dossier", "les_deux"} and role != "gestionnaire":
+        noms.append("query_database")
+    return noms
+
+
+def _outils_autorises(noms: list[str], role: str) -> list[str]:
+    if role == "gestionnaire":
+        return [nom for nom in noms if nom != "query_database"]
+    return noms
+
+
+def proposer_sql(question: str, erreur: str = "") -> str:
+    message = (
+        "Schema:\n"
+        + texte_schema()
+        + "\n\nExemples:\n"
+        + exemples_proches(question)
+        + "\n\nRegles: une seule requete SELECT sur ces vues. Pas de SELECT *. "
+        + "Pour une liste, choisis des lignes avec facture_id, statut, montant "
+        + "et date, pas seulement un total. "
+        + "N'ecris un identifiant ASS-, PRE- ou CTR- que si tu es l'administrateur."
+    )
+    if erreur:
+        message += "\n\nLa requete precedente a ete refusee: " + erreur
+    message += "\n\nQuestion:\n" + question
+    corps = _ollama(
+        "/api/chat",
+        {
+            "model": settings.ollama_model,
+            "stream": False,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Tu ecris uniquement le SQL demande, sans markdown.",
+                },
+                {"role": "user", "content": message},
+            ],
+        },
+    )
+    contenu = ((corps.get("message") or {}).get("content") or "").strip()
+    if not contenu:
+        raise ModeleIndisponible("sql vide")
+    return _extraire_sql(contenu)
+
+
+def _extraire_sql(texte: str) -> str:
+    if "```" in texte:
+        bloc = texte.split("```", 2)[1]
+        if bloc.lower().startswith("sql"):
+            bloc = bloc[3:]
+        texte = bloc
+    if ";" in texte:
+        texte = texte.split(";", 1)[0]
+    return texte.strip()
+
+
+def interroger(
+    connection, principal: Principal, question: str
+) -> tuple[list[dict], str | None, bool]:
+    portee = _portee(principal)
+    if portee is None:
+        return [], None, False
+    identifiants = principal.role == "administrateur"
+    erreur = ""
+    for _tour in range(3):
+        try:
+            sql = valider(proposer_sql(question, erreur), identifiants)
+            if demande_liste(question) and "facture_id" not in sql and "ordonnance_id" not in sql:
+                raise RequeteRefusee("la question demande une liste, pas un total")
+        except RequeteRefusee as exc:
+            erreur = str(exc)
+            continue
+        try:
+            return _executer(connection, sql, portee), sql, False
+        except psycopg.errors.QueryCanceled:
+            erreur = "delai depasse, simplifie la requete"
+        except psycopg.errors.ProgrammingError as exc:
+            erreur = _erreur_sql(exc)
+    return [{"lecture": "impossible"}], None, True
+
+
+def _portee(principal: Principal) -> tuple[str, str, bool] | None:
+    if principal.role == "administrateur":
+        return "", "", True
+    if principal.role == "assure" and principal.assure_id:
+        return principal.assure_id, "", False
+    if principal.role == "prestataire" and principal.prestataire_id:
+        return "", principal.prestataire_id, False
+    return None
+
+
+def _executer(connection, sql: str, portee: tuple[str, str, bool]) -> list[dict]:
+    assure_id, prestataire_id, admin = portee
+    if admin:
+        curseur = connection.execute(sql)
+        return _lignes(curseur)
+    with ouvrir_agent() as agent:
+        agent.execute("SELECT set_config('prediccare.assure_id', %s, true)", (assure_id,))
+        agent.execute(
+            "SELECT set_config('prediccare.prestataire_id', %s, true)",
+            (prestataire_id,),
+        )
+        return _lignes(agent.execute(sql))
+
+
+def _lignes(curseur) -> list[dict]:
+    if curseur.description is None:
+        return []
+    colonnes = [colonne.name for colonne in curseur.description]
+    return [
+        {colonnes[index]: _jsonable(valeur) for index, valeur in enumerate(ligne)}
+        for ligne in curseur.fetchmany(50)
     ]
+
+
+def _erreur_sql(exc: psycopg.Error) -> str:
+    message = ""
+    if exc.diag is not None and exc.diag.message_primary:
+        message = exc.diag.message_primary
+    return " ".join(message.split())[:180] or "requete refusee par la base"
+
+
+def _jsonable(valeur):
+    if valeur is None or isinstance(valeur, (str, int, float, bool)):
+        return valeur
+    return str(valeur)
 
 
 def _sources(extraits: list[dict], historique: list[dict] | None) -> list[dict]:
@@ -286,6 +470,8 @@ def _sources(extraits: list[dict], historique: list[dict] | None) -> list[dict]:
             vus.add(cle)
             sources.append({"source": ligne["source"], "page": ligne["page"]})
     for ligne in historique or []:
+        if "facture_id" not in ligne:
+            continue
         cle_facture = (ligne["facture_id"], None)
         if cle_facture not in vus:
             vus.add(cle_facture)

@@ -134,17 +134,36 @@ def grant_app_role() -> None:
         for statement in statements:
             connection.execute(statement)
         _limiter_agent(connection, app_user, agent_user)
+        with psycopg.ClientCursor(connection) as curseur:
+            curseur.execute(_sql_dossier().read_text(encoding="utf-8"))
+
+
+def _sql_dossier() -> Path:
+    nom = "015_dossier_vues.sql"
+    ici = Path(__file__).resolve()
+    for parent in ici.parents:
+        candidat = parent / "migrations" / "sql" / nom
+        if candidat.is_file():
+            return candidat
+    raise FileNotFoundError(nom)
 
 
 def _limiter_agent(connection: psycopg.Connection, app_user, agent_user) -> None:
+    compte = (
+        "(nullif(current_setting('prediccare.assure_id', true), '') IS NOT NULL "
+        "AND {colonne} = current_setting('prediccare.assure_id', true)) "
+        "OR (nullif(current_setting('prediccare.prestataire_id', true), '') IS NOT NULL "
+        "AND {autre} = current_setting('prediccare.prestataire_id', true))"
+    )
     filtres = {
         "assures": "assure_id = current_setting('prediccare.assure_id', true)",
-        "factures": "assure_id = current_setting('prediccare.assure_id', true)",
-        "ordonnances": "assure_id = current_setting('prediccare.assure_id', true)",
+        "factures": compte.format(colonne="assure_id", autre="prestataire_id"),
+        "ordonnances": compte.format(colonne="assure_id", autre="prescripteur_id"),
         "lignes_facture": (
             "EXISTS (SELECT 1 FROM clean.factures AS facture "
-            "WHERE facture.facture_id = lignes_facture.facture_id "
-            "AND facture.assure_id = current_setting('prediccare.assure_id', true))"
+            "WHERE facture.facture_id = lignes_facture.facture_id AND ("
+            + compte.format(colonne="facture.assure_id", autre="facture.prestataire_id")
+            + "))"
         ),
     }
     for table, filtre in filtres.items():

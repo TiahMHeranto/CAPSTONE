@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     ollama_embed_model: str = "nomic-embed-text"
     rag_dir: str = "/corpus"
     assistant_cache_similarite: float = 0.92
+    agent_statement_timeout_ms: int = 10000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -46,6 +47,17 @@ class Settings(BaseSettings):
     @property
     def psycopg_migrate_url(self) -> str:
         return self.migrate_database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+    @property
+    def psycopg_agent_url(self) -> str:
+        from urllib.parse import quote, urlsplit
+
+        base = urlsplit(self.psycopg_database_url)
+        hote = base.hostname or "localhost"
+        port = f":{base.port}" if base.port else ""
+        utilisateur = quote(self.agent_db_user, safe="")
+        mot = quote(self.agent_db_password, safe="")
+        return f"postgresql://{utilisateur}:{mot}@{hote}{port}{base.path}"
 
 
 settings = Settings()
