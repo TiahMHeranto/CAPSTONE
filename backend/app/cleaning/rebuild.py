@@ -61,9 +61,13 @@ STEPS = [
     """,
     """
     INSERT INTO clean.assures (
-        assure_id, contrat_id, sexe, tranche_age, ville, date_adhesion, date_radiation
+        assure_id, contrat_id, rang_beneficiaire, assure_principal_id,
+        sexe, tranche_age, ville, date_adhesion, date_radiation
     )
-    SELECT clean.pseudo(assure_id), NULLIF(contrat_id, ''), NULLIF(sexe, ''),
+    SELECT clean.pseudo(assure_id), NULLIF(contrat_id, ''),
+           NULLIF(rang_beneficiaire, ''),
+           clean.pseudo(NULLIF(assure_principal_id, '')),
+           NULLIF(sexe, ''),
            clean.tranche_age(
                clean.to_int(annee_naissance)::integer,
                current_setting('prediccare.age_reference')::integer

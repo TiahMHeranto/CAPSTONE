@@ -172,6 +172,8 @@ clean.assures  (table)
   date_adhesion                    date                         nullable=oui
   date_radiation                   date                         nullable=oui
   tranche_age                      text                         nullable=oui
+  rang_beneficiaire                text                         nullable=oui
+  assure_principal_id              text                         nullable=oui
 
 clean.contrats  (table)
   contrat_id                       text                         nullable=non

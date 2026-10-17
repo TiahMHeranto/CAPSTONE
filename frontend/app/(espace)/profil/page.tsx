@@ -7,6 +7,14 @@ import { appel, type Reponse } from "@/lib/api";
 type Nom = { nom?: string | null; prenoms?: string | null };
 type Contrat = { contrat_id?: string; formule?: string; statut?: string; date_effet?: string; date_fin?: string };
 
+function libelle(valeur: unknown): string {
+  if (valeur && typeof valeur === "object") {
+    const nom = valeur as Nom;
+    return [nom.prenoms, nom.nom].filter(Boolean).join(" ");
+  }
+  return typeof valeur === "string" ? valeur : "";
+}
+
 export default function Page() {
   const [reponse, setReponse] = useState<Reponse | null>(null);
 
@@ -15,14 +23,9 @@ export default function Page() {
   }, []);
 
   const data = reponse?.status === 200 ? reponse.data : null;
-  const nom = data?.nom as Nom | string | undefined;
   const contrat = data?.contrat as Contrat | null | undefined;
-  const titre =
-    nom && typeof nom === "object"
-      ? [nom.prenoms, nom.nom].filter(Boolean).join(" ")
-      : typeof nom === "string"
-        ? nom
-        : String(data?.identifiant ?? "");
+  const titre = libelle(data?.nom) || String(data?.identifiant ?? "");
+  const principal = libelle(data?.assure_principal);
 
   return (
     <>
@@ -44,10 +47,6 @@ export default function Page() {
               <dt className="text-ink/60">Rôle</dt>
               <dd>{String(data.role ?? "—")}</dd>
             </div>
-            <div>
-              <dt className="text-ink/60">Lien</dt>
-              <dd className="font-mono text-xs">{String(data.lien ?? data.motif ?? "—")}</dd>
-            </div>
             {data.type ? (
               <div>
                 <dt className="text-ink/60">Type</dt>
@@ -59,6 +58,15 @@ export default function Page() {
                 <dt className="text-ink/60">Rang</dt>
                 <dd>{String(data.rang)}</dd>
               </div>
+            ) : null}
+            {principal ? (
+              <div>
+                <dt className="text-ink/60">Assuré principal</dt>
+                <dd>{principal}</dd>
+              </div>
+            ) : null}
+            {data.motif ? (
+              <div className="text-sm text-ink/70 sm:col-span-2">{String(data.motif)}</div>
             ) : null}
             {data.ville ? (
               <div>

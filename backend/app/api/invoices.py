@@ -51,7 +51,15 @@ def submit_invoice(
     payload: FactureIn,
     principal: Annotated[Principal, Depends(exiger("prestataire", "gestionnaire"))],
 ) -> JSONResponse:
-    status, body = recevoir(payload, principal.identifiant)
+    facture = payload
+    if principal.role == "prestataire" and principal.prestataire_id:
+        if not payload.assure_id:
+            return JSONResponse(
+                status_code=422,
+                content={"code": "ASSURE_REQUIS", "motif": "une facture exige un assure"},
+            )
+        facture = payload.model_copy(update={"prestataire_id": principal.prestataire_id})
+    status, body = recevoir(facture, principal.identifiant)
     return JSONResponse(status_code=status, content=body)
 
 

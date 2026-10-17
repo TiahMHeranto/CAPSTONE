@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -20,6 +21,18 @@ class UtilisateurIn(BaseModel):
     role: Literal["prestataire", "assure", "gestionnaire", "administrateur"]
     assure_id: str | None = Field(default=None, max_length=64)
     prestataire_id: str | None = Field(default=None, max_length=64)
+
+
+class LigneOrdonnanceIn(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+    quantite: float = Field(gt=0, le=1000)
+
+
+class OrdonnanceIn(BaseModel):
+    assure_id: str = Field(min_length=1, max_length=64)
+    date_prescription: date
+    validite_jours: int = Field(ge=1, le=365)
+    lignes: list[LigneOrdonnanceIn] = Field(min_length=1, max_length=20)
 
 
 class LotFacturesIn(BaseModel):

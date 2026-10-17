@@ -2,6 +2,7 @@
 
 import json
 import logging
+import secrets
 
 import psycopg
 from cryptography.fernet import InvalidToken
@@ -10,6 +11,7 @@ from app.config import settings
 from app.core.tokens import ROLES, Principal, hacher
 from app.db.session import ouvrir
 from app.privacy.crypto import coffre_fernet, dechiffrer
+from app.services.referentiel import lire_codes, lister_catalogue
 
 logger = logging.getLogger(__name__)
 
@@ -139,12 +141,21 @@ def factures_de(principal: Principal) -> tuple[int, dict]:
                 f"""
                 SELECT facture_id, statut, type_facture, montant_total,
                        date_soin::text, ordonnance_id
-                FROM clean.factures
-                WHERE {colonne} = %s
+                FROM (
+                    SELECT facture_id, statut, type_facture, montant_total,
+                           date_soin, ordonnance_id
+                    FROM clean.factures
+                    WHERE {colonne} = %s
+                    UNION ALL
+                    SELECT facture_id, statut, type_facture, montant_total,
+                           date_soin, ordonnance_id
+                    FROM app.factures
+                    WHERE {colonne} = %s
+                ) AS dossier
                 ORDER BY date_soin DESC NULLS LAST
                 LIMIT 50
                 """,
-                (valeur,),
+                (valeur, valeur),
             ).fetchall()
     except psycopg.Error as exc:
         logger.warning("dossier factures erreur=%s", type(exc).__name__)
@@ -164,10 +175,13 @@ def factures_de(principal: Principal) -> tuple[int, dict]:
     }
 
 
-def ordonnances_de(principal: Principal) -> tuple[int, dict]:
+def ordonnances_de(principal: Principal, assure_cible: str | None = None) -> tuple[int, dict]:
     if principal.role == _LIEN_ASSURE and principal.assure_id:
         filtre = "assure_id = %s"
         valeur = principal.assure_id
+    elif principal.role == _LIEN_PRESTATAIRE and assure_cible:
+        filtre = "assure_id = %s"
+        valeur = assure_cible
     elif principal.role == _LIEN_PRESTATAIRE and principal.prestataire_id:
         filtre = "prescripteur_id = %s"
         valeur = principal.prestataire_id
@@ -177,11 +191,12 @@ def ordonnances_de(principal: Principal) -> tuple[int, dict]:
         with ouvrir() as connection:
             rows = connection.execute(
                 f"""
-                SELECT ordonnance_id, date_prescription::text, validite_jours, prescripteur_id
+                SELECT ordonnance_id, date_prescription::text, validite_jours,
+                       prescripteur_id, assure_id
                 FROM clean.ordonnances
                 WHERE {filtre}
                 ORDER BY date_prescription DESC NULLS LAST
-                LIMIT 50
+                LIMIT 80
                 """,
                 (valeur,),
             ).fetchall()
@@ -195,10 +210,94 @@ def ordonnances_de(principal: Principal) -> tuple[int, dict]:
                 "date_prescription": row[1],
                 "validite_jours": row[2],
                 "prescripteur_id": row[3],
+                "assure_id": row[4],
             }
             for row in rows
         ]
     }
+
+
+def assures_visibles(principal: Principal) -> tuple[int, dict]:
+    if principal.role != _LIEN_PRESTATAIRE:
+        return 403, {"code": "ACCES_REFUSE", "motif": "reserve au professionnel"}
+    try:
+        with ouvrir() as connection:
+            return 200, {"personnes": _noms_assures(connection)}
+    except psycopg.Error as exc:
+        logger.warning("annuaire assure erreur=%s", type(exc).__name__)
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+
+
+def catalogue(principal: Principal) -> tuple[int, dict]:
+    if principal.role != _LIEN_PRESTATAIRE:
+        return 403, {"code": "ACCES_REFUSE", "motif": "reserve au professionnel"}
+    try:
+        with ouvrir() as connection:
+            return 200, {"codes": lister_catalogue(connection)}
+    except psycopg.Error as exc:
+        logger.warning("referentiel erreur=%s", type(exc).__name__)
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+
+
+def creer_ordonnance(principal: Principal, payload) -> tuple[int, dict]:
+    if principal.role != _LIEN_PRESTATAIRE:
+        return 403, {"code": "ACCES_REFUSE", "motif": "reserve au professionnel"}
+    if not principal.prestataire_id:
+        return 422, {"code": "LIEN_REQUIS", "motif": "compte non rattache"}
+    try:
+        with ouvrir() as connection:
+            if not _existe(connection, "clean.assures", "assure_id", payload.assure_id):
+                return 422, {"code": "ASSURE_INCONNU", "motif": "assure absent du referentiel"}
+            if not _existe(
+                connection, "clean.prestataires", "prestataire_id", principal.prestataire_id
+            ):
+                return 422, {"code": "LIEN_INCONNU", "motif": "prestataire absent du referentiel"}
+            actes, medicaments = lire_codes(connection)
+            connus = actes | medicaments
+            for ligne in payload.lignes:
+                if ligne.code not in connus:
+                    return 422, {"code": "CODE_INCONNU", "motif": "code hors referentiel"}
+            identifiant = f"ORD-{secrets.token_hex(4).upper()}"
+            connection.execute(
+                "SELECT app.creer_ordonnance(%s, %s, %s, %s, %s, %s::jsonb)",
+                (
+                    identifiant,
+                    payload.assure_id,
+                    principal.prestataire_id,
+                    payload.date_prescription,
+                    payload.validite_jours,
+                    json.dumps(
+                        [
+                            {"code": ligne.code, "quantite": ligne.quantite}
+                            for ligne in payload.lignes
+                        ]
+                    ),
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO app.audit_log (acteur, action, entite, entite_id, detail)
+                VALUES (%s, 'creation_ordonnance', 'ordonnance', %s, %s::jsonb)
+                """,
+                (
+                    principal.identifiant,
+                    identifiant,
+                    json.dumps({"lignes": len(payload.lignes)}),
+                ),
+            )
+            connection.commit()
+    except psycopg.errors.UniqueViolation:
+        return 409, {"code": "DOUBLON", "motif": "ordonnance deja presente"}
+    except psycopg.Error as exc:
+        logger.warning("creation ordonnance erreur=%s", type(exc).__name__)
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+    return 201, {"ordonnance_id": identifiant, "motif": "ordonnance enregistree"}
+
+
+def fiche_connectee(connection, principal: Principal) -> dict | None:
+    if principal.role != _LIEN_ASSURE:
+        return None
+    return _profil_assure(connection, principal)
 
 
 def _profil_assure(connection, principal: Principal) -> dict:
@@ -211,8 +310,8 @@ def _profil_assure(connection, principal: Principal) -> dict:
         }
     row = connection.execute(
         """
-        SELECT a.assure_id, a.sexe, a.ville,
-               a.date_adhesion::text, a.date_radiation::text,
+        SELECT a.assure_id, a.rang_beneficiaire, a.assure_principal_id,
+               a.sexe, a.ville, a.date_adhesion::text, a.date_radiation::text,
                a.contrat_id, c.formule, c.statut, c.date_effet::text, c.date_fin::text
         FROM clean.assures AS a
         LEFT JOIN clean.contrats AS c ON c.contrat_id = a.contrat_id
@@ -227,21 +326,29 @@ def _profil_assure(connection, principal: Principal) -> dict:
             "lien": principal.assure_id,
             "motif": "assure absent du referentiel",
         }
+    nom = _nom(connection, principal.identifiant, row[0])
+    principal_id = row[2]
+    if principal_id and principal_id != row[0]:
+        assure_principal = _nom(connection, principal.identifiant, principal_id)
+    else:
+        assure_principal = nom if principal_id else None
     return {
         "identifiant": principal.identifiant,
         "role": principal.role,
         "lien": row[0],
-        "nom": _nom(connection, principal.identifiant, row[0]),
-        "sexe": row[1],
-        "ville": row[2],
-        "date_adhesion": row[3],
-        "date_radiation": row[4],
+        "nom": nom,
+        "rang": row[1],
+        "assure_principal": assure_principal,
+        "sexe": row[3],
+        "ville": row[4],
+        "date_adhesion": row[5],
+        "date_radiation": row[6],
         "contrat": {
-            "contrat_id": row[5],
-            "formule": row[6],
-            "statut": row[7],
-            "date_effet": row[8],
-            "date_fin": row[9],
+            "contrat_id": row[7],
+            "formule": row[8],
+            "statut": row[9],
+            "date_effet": row[10],
+            "date_fin": row[11],
         },
     }
 
@@ -307,9 +414,9 @@ def _noms_assures(connection) -> list[dict]:
         "SELECT pseudo_id, charge FROM identites.lire_annuaire()"
     ).fetchall()
     lieux = {
-        row[0]: row[1]
+        row[0]: (row[1], row[2])
         for row in connection.execute(
-            "SELECT assure_id, ville FROM clean.assures"
+            "SELECT assure_id, ville, rang_beneficiaire FROM clean.assures"
         ).fetchall()
     }
     personnes = []
@@ -326,11 +433,13 @@ def _noms_assures(connection) -> list[dict]:
         libelle = " ".join(part for part in (prenoms, nom) if part)
         if not libelle:
             continue
+        ville, rang = lieux.get(pseudo_id, (None, None))
         personnes.append(
             {
                 "assure_id": pseudo_id,
                 "nom": libelle,
-                "ville": lieux.get(pseudo_id),
+                "ville": ville,
+                "rang": rang,
             }
         )
     personnes.sort(key=lambda item: item["nom"].casefold())

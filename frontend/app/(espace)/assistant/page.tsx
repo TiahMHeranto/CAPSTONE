@@ -30,9 +30,9 @@ export default function Page() {
       <div>
         <h1 className="text-4xl">Assistant</h1>
         <p className="mt-2 text-sm text-ink/70">
-          Les conditions générales, le barème et les guides sont communs. Les conditions particulières d'un contrat
-          ne sont lues que par l'assuré de ce contrat et par l'administrateur. Un assuré voit en plus ses propres
-          factures. Une question qui cherche à sortir de ce périmètre est refusée.
+          Une question de garantie lit les contrats. Une question de dossier écrit une requête SQL vérifiée, exécutée en lecture seule sur les factures du compte connecté.
+          Un assuré reçoit les conditions générales de sa formule, pas celles des autres. Une question qui cherche à
+          sortir de ce périmètre est refusée.
         </p>
       </div>
       <Carte>
@@ -59,6 +59,12 @@ export default function Page() {
                   </li>
                 ))}
               </ul>
+            ) : null}
+            {reponse.data.requete ? (
+              <details className="text-ink/70">
+                <summary>Requête vérifiée</summary>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{String(reponse.data.requete)}</pre>
+              </details>
             ) : null}
             {reponse.data.cache ? <p className="text-ink/50">Réponse reprise du cache.</p> : null}
           </div>

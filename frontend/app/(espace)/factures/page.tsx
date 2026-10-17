@@ -14,6 +14,14 @@ type Dossier = {
   date_soin: string | null;
 };
 
+type Personne = { assure_id: string; nom: string; ville?: string | null; rang?: string | null };
+type OrdonnanceOption = {
+  ordonnance_id: string;
+  date_prescription: string | null;
+  validite_jours: number | null;
+};
+type Code = { code: string; libelle?: string | null; type_ligne: string };
+
 function aujourdHui() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -39,6 +47,9 @@ export default function Page() {
   const [lot, setLot] = useState("");
   const [reponse, setReponse] = useState<Reponse | null>(null);
   const [dossier, setDossier] = useState<Dossier[]>([]);
+  const [personnes, setPersonnes] = useState<Personne[]>([]);
+  const [ordonnances, setOrdonnances] = useState<OrdonnanceOption[]>([]);
+  const [codes, setCodes] = useState<Code[]>([]);
   const [enCours, setEnCours] = useState(false);
 
   useEffect(() => {
@@ -51,10 +62,38 @@ export default function Page() {
         if (recu.status === 200) setDossier((recu.data.factures as Dossier[]) ?? []);
       });
     }
+    if (actuel === "prestataire") {
+      setCode("");
+      appel("/me/assures").then((recu) => {
+        if (recu.status === 200) setPersonnes((recu.data.personnes as Personne[]) ?? []);
+      });
+      appel("/me/referentiel").then((recu) => {
+        if (recu.status === 200) setCodes((recu.data.codes as Code[]) ?? []);
+      });
+    }
   }, []);
+
+  useEffect(() => {
+    if (role !== "prestataire" || !assureId) {
+      setOrdonnances([]);
+      return;
+    }
+    appel(`/me/ordonnances?assure_id=${encodeURIComponent(assureId)}`).then((recu) => {
+      if (recu.status === 200) setOrdonnances((recu.data.ordonnances as OrdonnanceOption[]) ?? []);
+    });
+  }, [role, assureId]);
 
   const peutDeposer = role === "prestataire" || role === "gestionnaire";
   const peutValider = role === "prestataire" || role === "gestionnaire" || role === "administrateur";
+  const estPrestataire = role === "prestataire";
+  const actes = codes.filter((item) => item.type_ligne === "ACTE");
+  const medicaments = codes.filter((item) => item.type_ligne === "MEDICAMENT");
+
+  function choisirCode(valeur: string) {
+    setCode(valeur);
+    const trouve = codes.find((item) => item.code === valeur);
+    if (trouve) setTypeLigne(trouve.type_ligne);
+  }
 
   function corps() {
     return {
@@ -64,7 +103,7 @@ export default function Page() {
       date_facture: dateFacture,
       montant_total: Number(montant),
       devise: "MGA",
-      prestataire_id: prestataireId || null,
+      prestataire_id: role === "prestataire" ? null : prestataireId || null,
       assure_id: assureId || null,
       ordonnance_id: ordonnanceId || null,
       lignes: [
@@ -180,40 +219,105 @@ export default function Page() {
                 onChange={(event) => setMontant(Number(event.target.value))}
               />
             </label>
+            {estPrestataire ? (
+              <label className="md:col-span-2">
+                <Etiquette>Assuré</Etiquette>
+                <select
+                  className={champ}
+                  value={assureId}
+                  onChange={(event) => {
+                    setAssureId(event.target.value);
+                    setOrdonnanceId("");
+                  }}
+                >
+                  <option value="">Choisir un nom</option>
+                  {personnes.map((personne) => {
+                    const precision = [personne.ville, personne.rang].filter(Boolean).join(" · ");
+                    return (
+                      <option key={personne.assure_id} value={personne.assure_id}>
+                        {personne.nom}
+                        {precision ? ` — ${precision}` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            ) : (
+              <label>
+                <Etiquette>Pseudonyme assuré</Etiquette>
+                <input className={champ} value={assureId} onChange={(event) => setAssureId(event.target.value)} />
+              </label>
+            )}
             <label>
               <Etiquette>Code référentiel</Etiquette>
-              <input className={champ} value={code} onChange={(event) => setCode(event.target.value)} />
+              {estPrestataire ? (
+                <select className={champ} value={code} onChange={(event) => choisirCode(event.target.value)}>
+                  <option value="">Choisir un acte ou un médicament</option>
+                  <optgroup label="Actes">
+                    {actes.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.code} — {item.libelle ?? ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Médicaments">
+                    {medicaments.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.code} — {item.libelle ?? ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              ) : (
+                <input className={champ} value={code} onChange={(event) => setCode(event.target.value)} />
+              )}
             </label>
-            <label>
-              <Etiquette>Type de ligne</Etiquette>
-              <select className={champ} value={typeLigne} onChange={(event) => setTypeLigne(event.target.value)}>
-                <option value="ACTE">ACTE</option>
-                <option value="MEDICAMENT">MEDICAMENT</option>
-              </select>
-            </label>
-            <label>
-              <Etiquette>Pseudonyme assuré</Etiquette>
-              <input className={champ} value={assureId} onChange={(event) => setAssureId(event.target.value)} />
-            </label>
-            <label>
+            {estPrestataire ? null : (
+              <label>
+                <Etiquette>Type de ligne</Etiquette>
+                <select className={champ} value={typeLigne} onChange={(event) => setTypeLigne(event.target.value)}>
+                  <option value="ACTE">ACTE</option>
+                  <option value="MEDICAMENT">MEDICAMENT</option>
+                </select>
+              </label>
+            )}
+            <label className={estPrestataire ? "md:col-span-2" : undefined}>
               <Etiquette>Ordonnance</Etiquette>
-              <input className={champ} value={ordonnanceId} onChange={(event) => setOrdonnanceId(event.target.value)} />
+              {estPrestataire ? (
+                <select className={champ} value={ordonnanceId} onChange={(event) => setOrdonnanceId(event.target.value)}>
+                  <option value="">Sans ordonnance</option>
+                  {ordonnances.map((ligne) => (
+                    <option key={ligne.ordonnance_id} value={ligne.ordonnance_id}>
+                      {ligne.ordonnance_id} · {ligne.date_prescription ?? "—"} · {ligne.validite_jours ?? "—"} j
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input className={champ} value={ordonnanceId} onChange={(event) => setOrdonnanceId(event.target.value)} />
+              )}
             </label>
-            <label className="md:col-span-2">
-              <Etiquette>Identifiant prestataire</Etiquette>
-              <input
-                className={champ}
-                value={prestataireId}
-                onChange={(event) => setPrestataireId(event.target.value)}
-              />
-            </label>
+            {estPrestataire ? null : (
+              <label className="md:col-span-2">
+                <Etiquette>Identifiant prestataire</Etiquette>
+                <input
+                  className={champ}
+                  value={prestataireId}
+                  onChange={(event) => setPrestataireId(event.target.value)}
+                />
+              </label>
+            )}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button className={boutonSecond} type="button" disabled={enCours} onClick={() => envoyer("/invoices/validate")}>
               Valider
             </button>
             {peutDeposer ? (
-              <button className={bouton} type="button" disabled={enCours} onClick={() => envoyer("/invoices")}>
+              <button
+                className={bouton}
+                type="button"
+                disabled={enCours || (estPrestataire && (!assureId || !code))}
+                onClick={() => envoyer("/invoices")}
+              >
                 Déposer et scorer
               </button>
             ) : (
@@ -226,7 +330,7 @@ export default function Page() {
           <p className="text-sm">L&apos;assuré consulte ses factures. Il ne les dépose pas.</p>
         </Carte>
       )}
-      {peutDeposer ? (
+      {peutDeposer && !estPrestataire ? (
         <Carte titre="Lot">
           <form onSubmit={envoyerLot}>
             <Etiquette>JSON : une facture, ou une liste</Etiquette>

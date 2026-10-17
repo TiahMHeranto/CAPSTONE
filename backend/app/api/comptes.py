@@ -5,11 +5,14 @@ from fastapi.responses import JSONResponse
 
 from app.core.auth import exiger
 from app.core.tokens import Principal
-from app.schemas.flux import UtilisateurIn
+from app.schemas.flux import OrdonnanceIn, UtilisateurIn
 from app.services.comptes import (
     annuaire,
+    assures_visibles,
+    catalogue,
     contrat_de,
     creer,
+    creer_ordonnance,
     factures_de,
     lister,
     ordonnances_de,
@@ -71,9 +74,35 @@ def read_invoices(
     return JSONResponse(status_code=status, content=body)
 
 
+@router.get("/me/assures")
+def list_insured(
+    principal: Annotated[Principal, Depends(exiger("prestataire"))],
+) -> JSONResponse:
+    status, body = assures_visibles(principal)
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.get("/me/referentiel")
+def list_codes(
+    principal: Annotated[Principal, Depends(exiger("prestataire"))],
+) -> JSONResponse:
+    status, body = catalogue(principal)
+    return JSONResponse(status_code=status, content=body)
+
+
 @router.get("/me/ordonnances")
 def read_prescriptions(
     principal: Annotated[Principal, Depends(exiger("prestataire", "assure"))],
+    assure_id: Annotated[str | None, Query(max_length=64)] = None,
 ) -> JSONResponse:
-    status, body = ordonnances_de(principal)
+    status, body = ordonnances_de(principal, assure_id)
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.post("/me/ordonnances")
+def create_prescription(
+    payload: OrdonnanceIn,
+    principal: Annotated[Principal, Depends(exiger("prestataire"))],
+) -> JSONResponse:
+    status, body = creer_ordonnance(principal, payload)
     return JSONResponse(status_code=status, content=body)
