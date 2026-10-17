@@ -39,8 +39,8 @@ Le membre 3 n'a pas encore déposé de fiche de menaces dans le dépôt. Il n'y 
 
 Côté membre 2, ces trois points sont déjà vrais :
 
-- `prediccare_agent` n'a que `SELECT`. L'assistant ne lui envoie une requête qu'après validation : un seul `SELECT`, tables du dossier, plafond de lignes, aucun identifiant de compte dans le texte.
-- Chaque politique exige `prediccare.assure_id` ou `prediccare.prestataire_id`, posé par la session, pas par le texte de la question. Le rôle a un `statement_timeout` de 10 s.
+- `prediccare_agent` n'a que `SELECT` sur `clean.assures`, `clean.factures`, `clean.lignes_facture` et `clean.ordonnances`.
+- Chaque politique exige `prediccare.assure_id`, posé par la session, pas par le texte de la question.
 - Les lectures d'identité passent par `identites.lire_charge(%s)` et `identites.effacer_charge(%s)`.
 
 `backend/app/db/seed.py` construit un `COUNT(*)` avec le nom de table du catalogue, pendant le chargement, pas depuis une requête HTTP.

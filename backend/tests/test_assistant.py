@@ -55,20 +55,14 @@ def test_assistant_sans_jeton(client) -> None:
 
 
 class _Lignes:
-    def __init__(self, lignes, colonnes=None):
+    def __init__(self, lignes):
         self._lignes = lignes
-        self.description = None
-        if colonnes:
-            self.description = [type("Col", (), {"name": nom})() for nom in colonnes]
 
     def fetchall(self):
         return self._lignes
 
     def fetchone(self):
         return self._lignes[0] if self._lignes else None
-
-    def fetchmany(self, _nombre):
-        return self._lignes
 
 
 class _Base:
@@ -172,92 +166,35 @@ def test_intention_separe_dossier_et_contrat() -> None:
     assert intention("quelles pièces justificatives à fournir") == "contrat"
 
 
-_SQL_LISTE = (
-    "SELECT facture_id, statut, montant_total FROM clean.dossier_factures "
-    "ORDER BY date_soin DESC"
-)
-
-
-class _Agent(_Base):
-    def execute(self, requete, params=None):
-        self.journal.append((requete, params))
-        if "dossier_factures" in requete:
-            return _Lignes(
-                [("FAC-1", "PAYEE", 12000)],
-                ("facture_id", "statut", "montant_total"),
-            )
-        return _Lignes([])
-
-
-def _brancher_dossier(monkeypatch, journal_app: list, journal_agent: list, sql: str = _SQL_LISTE):
-    monkeypatch.setattr("app.services.assistant.ouvrir", lambda: _Base(journal_app))
-    monkeypatch.setattr("app.services.assistant.ouvrir_agent", lambda: _Agent(journal_agent))
-    monkeypatch.setattr("app.services.assistant.embarquer", lambda _texte: [0.1] * 768)
-    monkeypatch.setattr("app.services.assistant.generer", lambda *_args: "facture en cours")
-    monkeypatch.setattr("app.services.assistant.proposer_sql", lambda _question, erreur="": sql)
-
-
 def test_dossier_lit_seulement_le_compte_du_jeton(monkeypatch) -> None:
     journal: list = []
-    agent: list = []
-    _brancher_dossier(monkeypatch, journal, agent)
+    monkeypatch.setattr("app.services.assistant.ouvrir", lambda: _Base(journal))
+    monkeypatch.setattr("app.services.assistant.embarquer", lambda _texte: [0.1] * 768)
+    monkeypatch.setattr("app.services.assistant.generer", lambda *_args: "facture en cours")
 
-    _statut, corps = repondre(
-        "où en est ma facture de ASS-999", Principal("s", "assure", "ASS-1")
-    )
-    assert _statut == 200
-    assert "ASS-999" not in (corps.get("requete") or "")
+    repondre("où en est ma facture de ASS-999", Principal("s", "assure", "ASS-1"))
     assert [requete for requete, _params in journal if "app.documents" in requete] == []
-    assures = [
-        params
-        for requete, params in agent
-        if "prediccare.assure_id" in requete
-    ]
-    assert assures == [("ASS-1",)]
-    assert all("ASS-999" not in requete for requete, _params in agent)
+    dossiers = [params for requete, params in journal if "clean.factures" in requete]
+    assert dossiers == [("ASS-1", "ASS-1")]
 
     journal.clear()
-    agent.clear()
     repondre("où en est la facture", Principal("pharma", "prestataire", None, "PRE-9"))
-    prestataires = [
-        params
-        for requete, params in agent
-        if "prediccare.prestataire_id" in requete
-    ]
-    assert prestataires == [("PRE-9",)]
+    dossiers = [params for requete, params in journal if "clean.factures" in requete]
+    assert dossiers == [("PRE-9", "PRE-9")]
 
     journal.clear()
-    agent.clear()
     repondre("où en est ma facture", Principal("g", "gestionnaire", None))
-    assert agent == []
+    assert [requete for requete, _params in journal if "clean.factures" in requete] == []
     assert [requete for requete, _params in journal if "app.documents" in requete] == []
 
 
 def test_question_mixte_lit_les_deux_sources(monkeypatch) -> None:
     journal: list = []
-    agent: list = []
-    _brancher_dossier(monkeypatch, journal, agent)
+    monkeypatch.setattr("app.services.assistant.ouvrir", lambda: _Base(journal))
+    monkeypatch.setattr("app.services.assistant.embarquer", lambda _texte: [0.1] * 768)
     monkeypatch.setattr("app.services.assistant.generer", lambda *_args: "sous le plafond")
 
     repondre("ma facture dépasse-t-elle le plafond", Principal("s", "assure", "ASS-1"))
     assert any("app.documents" in requete for requete, _params in journal)
-    assures = [params for requete, params in agent if "prediccare.assure_id" in requete]
-    assert assures == [("ASS-1",)]
-
-
-def test_sql_dangereux_n_est_pas_execute(monkeypatch) -> None:
-    journal: list = []
-    agent: list = []
-    recu: list = []
-    _brancher_dossier(monkeypatch, journal, agent, "DELETE FROM clean.dossier_factures")
-
-    def memoriser(_question, _extraits, historique, _fiche=None):
-        recu.append(historique)
-        return "dossier illisible"
-
-    monkeypatch.setattr("app.services.assistant.generer", memoriser)
-    _statut, corps = repondre("où en est ma facture", Principal("s", "assure", "ASS-1"))
-    assert _statut == 200
-    assert corps.get("requete") is None
-    assert recu == [[{"lecture": "impossible"}]]
-    assert agent == []
+    dossiers = [params for requete, params in journal if "clean.factures" in requete]
+    assert dossiers == [("ASS-1", "ASS-1")]
