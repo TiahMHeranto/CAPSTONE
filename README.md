@@ -1,6 +1,6 @@
 # PrediCare TPA
 
-Plateforme de contrôle des factures de tiers payant. Ce dépôt démarre la pile avec une commande. Le modèle réel, l'interface et l'assistant documentaire viendront dans les étapes suivantes. Un modèle simulé occupe déjà la fonction de prédiction.
+Plateforme de contrôle des factures de tiers payant. Ce dépôt démarre la pile avec une commande. Le score vient du pipeline XGBoost `v2` (23 variables). Sans le fichier de poids, le dépôt refuse la facture.
 
 ## Démarrage
 
@@ -9,7 +9,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Puis ouvrir `http://localhost:8000/health`. La réponse attendue contient `"status": "ok"` et `"model_version": "mock-0.1"`.
+Puis ouvrir `http://localhost:8000/health`. La réponse attendue contient `"status": "ok"` et `"model_version": "v2"`.
 
 n8n écoute sur `http://localhost:5678`. Le workflow d'alerte s'importe selon `docs/04-workflow/fiche-alerte.md`. Superset écoute sur `http://localhost:8088` et lit le schéma `bi`.
 
@@ -45,7 +45,7 @@ pip-audit -r backend/requirements.txt
 
 `POST /invoices/validate` réutilise les règles du passage `raw` → `clean`. Une facture invalide reçoit `422` avec un code et un motif. Le schéma `clean` est reconstruit à chaque démarrage du service `migrate`, sans lire les labels. Les assurés y portent un pseudonyme, pas leur identité.
 
-`POST /auth/login` délivre un jeton pour les quatre rôles. `POST /invoices` score une facture valide avec la version active (`mock-0.1` par défaut) et le seuil lu dans `app.settings`. Une facture invalide est rejetée avec un code et un motif, et une ligne d'audit. Le contrat est dans `docs/05-api/contrat-donnees.md`.
+`POST /auth/login` délivre un jeton pour les quatre rôles. `POST /invoices` score une facture valide avec la version active (`v2`) et le seuil lu dans `app.settings`. Une facture invalide est rejetée avec un code et un motif, et une ligne d'audit. Le contrat est dans `docs/05-api/contrat-donnees.md`.
 
 `POST /admin/reidentify` et `POST /admin/erase` exigent l'en-tête `X-Admin-Key`. Ils écrivent l'audit sans y copier le nom. `PATCH /admin/settings` accepte aussi le jeton administrateur : seuil, canaux, URL n8n, version active. Le changement est lu à la facture suivante, sans redémarrage, et une ligne d'audit garde l'ancienne valeur, la nouvelle, l'auteur et l'heure.
 
@@ -55,7 +55,7 @@ pip-audit -r backend/requirements.txt
 
 ## Registre des modèles
 
-Le membre 1 a entraîné trois versions. Le pipeline retenu est `models/v2/model.joblib` : 29 variables, XGBoost. `baseline` et `v1` restent des fiches sans poids. Tant que la version active est `mock-0.1`, l'API score avec le mock. Passer `active_model_version` à `v2` charge le pipeline, et le retour au mock se fait dans le même processus. Le seuil d'alerte reste celui de `app.settings`, distinct du seuil de rappel enregistré sur la fiche.
+Le membre 1 a entraîné `v1` et `v2`. Le pipeline retenu est `models/v2/model.joblib` : 23 variables, XGBoost. Il n'y a pas de score simulé. Sans ce fichier de poids, le dépôt répond `503` `MODELE_INDISPONIBLE` et la facture n'est pas enregistrée. Le seuil d'alerte reste celui de `app.settings`, distinct du seuil de rappel enregistré sur la fiche.
 
 ## Alerte
 

@@ -14,7 +14,7 @@ from app.core.tokens import hacher
 from app.db.seed import seed_if_empty
 from app.privacy.protect import proteger_identites
 from app.privacy.scan import scanner, secrets_identites
-from app.services.registry import VERSION_SIMULEE, lister_fiches
+from app.services.registry import lister_fiches
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +292,7 @@ def enregistrer_modeles() -> None:
             VALUES ('active_model_version', %s)
             ON CONFLICT (key) DO NOTHING
             """,
-            (VERSION_SIMULEE,),
+            ("v2",),
         )
         connection.commit()
     logger.info("registre modeles n=%s", len(fiches))

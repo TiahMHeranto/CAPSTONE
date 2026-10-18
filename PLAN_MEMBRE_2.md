@@ -2,7 +2,7 @@
 
 Backend, base de données et MLOps. Ce document décrit uniquement le travail du membre 2. Il ne décrit pas l’entraînement du modèle (membre 1) ni le RAG, les écrans et le tableau de bord (membre 3).
 
-Le membre 2 construit le socle, expose les fonctions par API et assemble les blocs. Il démarre avec un modèle simulé. Il n’attend ni XGBoost ni l’interface pour avancer.
+Le membre 2 construit le socle, expose les fonctions par API et assemble les blocs. Le score en service est le pipeline `v2` du membre 1. Il n’y a plus de modèle simulé.
 
 Sources de cette répartition : `Repartition_taches_PrediCare_TPA.pdf` et `PrediCare TPA - Plan de réalisation de bout en bout.pdf`.
 

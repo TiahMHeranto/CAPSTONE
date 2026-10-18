@@ -1,4 +1,3 @@
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -14,24 +13,25 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_fiches_sans_fuite() -> None:
     fiches = lister_fiches(ROOT / "models")
     versions = {fiche.version: fiche for fiche in fiches}
-    assert set(versions) == {"baseline", "v1", "v2"}
+    assert set(versions) == {"v1", "v2"}
     for fiche in fiches:
         assert not set(fiche.colonnes) & COLONNES_INTERDITES
         assert fiche.seuil_metier < 1
-    assert versions["v2"].artefact_present is True
-    assert versions["v2"].algorithme == "xgb"
-    assert versions["v2"].colonnes == COLONNES_V2
-    assert versions["baseline"].artefact_present is False
-    assert versions["baseline"].algorithme == "hgb"
+        assert fiche.artefact_present is False
+        assert fiche.algorithme == "xgboost"
+        assert fiche.colonnes == COLONNES_V2
+    assert len(versions["v2"].colonnes) == 23
 
 
-def test_v2_sans_variables_laisse_le_mock_intact() -> None:
-    simulé = predict("FAC-00000001", alert_threshold=1)
+def test_v2_sans_poids_ne_score_pas() -> None:
     with pytest.raises(ModeleIndisponible):
-        predict("FAC-00000001", alert_threshold=1, version="v2", models_dir=str(ROOT / "models"))
-    encore = predict("FAC-00000001", alert_threshold=1)
-    assert encore.score == simulé.score
-    assert encore.model_version == "mock-0.1"
+        predict(
+            "FAC-00000001",
+            alert_threshold=1,
+            version="v2",
+            models_dir=str(ROOT / "models"),
+            variables={"type_facture": "CONSULTATION"},
+        )
 
 
 def _facture() -> dict:
@@ -84,39 +84,10 @@ def test_variables_ordonnance_et_repetition() -> None:
     assert variables["presta_apres_fin_convention"] == 1
     assert variables["repetition_potentielle"] == 1
     assert variables["nb_factures_meme_jour_prestataire"] == 2
-    assert variables["formule"] == "ESSENTIEL"
+    assert variables["a_ordonnance"] == 1
+    assert variables["nb_factures_assure_7j"] == 2
+    assert "formule" not in variables
     assert "est_fraude" not in variables
-
-
-@pytest.mark.skipif(sys.version_info >= (3, 14), reason="le pipeline se charge en Python 3.12")
-def test_v2_score_puis_retour_au_mock() -> None:
-    variables = construire_variables(
-        _facture(),
-        [{"code": "CONS-GEN", "quantite": 1, "prix_unitaire": 19000, "montant": 19000}],
-        contrat={"formule": "ESSENTIEL"},
-        prestataire={
-            "type_prestataire": "CABINET_GENERALISTE",
-            "specialite": None,
-            "niveau_tarif": "RAISONNABLE",
-            "date_conventionnement": date(2020, 1, 1),
-            "date_fin_convention": None,
-        },
-        tarifs={"CONS-GEN": 19000},
-    )
-    score = predict(
-        "FAC-1",
-        alert_threshold=1,
-        version="v2",
-        models_dir=str(ROOT / "models"),
-        variables=variables,
-    )
-    assert score.model_version == "v2"
-    assert 0 <= score.score <= 1
-    assert score.explications
-    assert score.classe == "normale"
-    retour = predict("FAC-1", alert_threshold=0, models_dir=str(ROOT / "models"))
-    assert retour.model_version == "mock-0.1"
-    assert retour.classe == "alerte"
 
 
 class _Resultat:
@@ -139,10 +110,18 @@ class _Connexion:
 
 
 def test_enregistrement_porte_la_version_et_les_explications() -> None:
-    prediction = predict("FAC-1", alert_threshold=0)
+    from app.schemas.prediction import Contribution, Prediction
+
+    prediction = Prediction(
+        facture_id="FAC-1",
+        score=0.2,
+        classe="normale",
+        model_version="v2",
+        explications=[Contribution(variable="montant_total", contribution=0.2, libelle="Montant")],
+    )
     connexion = _Connexion()
     assert enregistrer(connexion, prediction) == 7
     insertions = [requete for requete, _ in connexion.requetes]
     assert any("app.predictions" in requete for requete in insertions)
     assert any("app.shap_explanations" in requete for requete in insertions)
-    assert connexion.requetes[0][1][3] == "mock-0.1"
+    assert connexion.requetes[0][1][3] == "v2"

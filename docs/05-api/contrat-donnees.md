@@ -36,15 +36,15 @@ Facture valide :
     "facture_id": "FAC-00000001",
     "score": 0.42,
     "classe": "normale",
-    "model_version": "mock-0.1",
+    "model_version": "v2",
     "explications": [
-      {"variable": "mock", "contribution": -0.38, "libelle": "Score simulé, en attente du modèle"}
+      {"variable": "montant_total", "contribution": 0.12, "libelle": "Montant total de la facture"}
     ]
   }
 }
 ```
 
-`classe` vaut `alerte` quand le score atteint le seuil lu dans `app.settings` au moment de l'appel. `model_version` est la version active. Tant qu'elle vaut `mock-0.1`, le score est simulé. `notifie` vaut vrai seulement si la classe est `alerte`, qu'une URL http ou https est configurée, et que l'appel webhook a répondu.
+`classe` vaut `alerte` quand le score atteint le seuil lu dans `app.settings` au moment de l'appel. `model_version` est la version active, `v2` par défaut. Sans le fichier de poids, la réponse est `503` et la facture n'est pas enregistrée. `notifie` vaut vrai seulement si la classe est `alerte`, qu'une URL http ou https est configurée, et que l'appel webhook a répondu.
 
 Le corps envoyé à n8n ajoute `assure_id` (pseudonyme, ou chaîne vide). Le workflow journalise ensuite chaque canal via `POST /alerts/journal`. `GET /alerts/journal?statut=echec` est la file d'erreurs.
 

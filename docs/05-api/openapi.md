@@ -57,7 +57,7 @@ Authorization: Bearer <jeton>
 {"alert_threshold": 0.5}
 ```
 
-La facture suivante lit cette valeur. Pour revenir au score simulé : `{"active_model_version": "mock-0.1"}`. L'audit conserve l'auteur, l'ancienne valeur, la nouvelle valeur et l'horodatage.
+La facture suivante lit cette valeur. Pour revenir à la version précédente : `{"active_model_version": "v1"}`. L'audit conserve l'auteur, l'ancienne valeur, la nouvelle valeur et l'horodatage.
 
 Tableau de bord, rôles gestionnaire et administrateur :
 

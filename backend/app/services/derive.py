@@ -11,7 +11,6 @@ from pathlib import Path
 
 from app.config import settings
 from app.services.audit import auditer
-from app.services.registry import VERSION_SIMULEE
 from app.services.reglages import lire
 
 logger = logging.getLogger(__name__)
@@ -66,8 +65,6 @@ def evaluer(connection, acteur: str) -> dict:
     if not seuil_brut:
         return _corps("reglage_absent", version, None, None, 0, False, False)
     seuil = float(seuil_brut)
-    if version == VERSION_SIMULEE:
-        return _corps("non_applicable", version, seuil, None, 0, False, False)
     try:
         reference = lire_reference(Path(settings.models_dir), version)
     except ValueError:

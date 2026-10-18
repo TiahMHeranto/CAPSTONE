@@ -6,23 +6,23 @@ La pile se lance avec `docker compose up`. Elle contient PostgreSQL (pgvector), 
 
 ## État actuel
 
-- Version de modèle active : `v2` (pipeline XGBoost, 29 variables). Le retour à `mock-0.1` se fait sans redémarrer l'API.
+- Version de modèle active : `v2` (pipeline XGBoost, 23 variables). Le retour à `v1` se fait sans redémarrer l'API. Il n'y a pas de score simulé.
 - Seuil d'alerte : lu dans `app.settings` (valeur d'exemple du cahier des charges : 0,8). Ce n'est pas le seuil de rappel de la fiche du membre 1 (environ 0,73).
 - Cohorte chargée : 84 593 factures dans `clean`, identités chiffrées (4 459 charges). Les labels ne sont pas lus par l'API.
 - Tests : 93 passent, 1 est ignoré (le score réel v2 se calcule dans le conteneur Python 3.12, pas sur le Python 3.14 de l'hôte).
 - Répétition de la chaîne exécutée deux fois, avec un redémarrage entre les deux. Les deux se terminent sans échec.
 
-`GET /health` répond. Son champ `model_version` affiche encore la constante `mock-0.1`. La version vraiment active est dans `GET /admin/settings`.
+`GET /health` répond. Son champ `model_version` vaut `v2`. La version vraiment active est dans `GET /admin/settings`.
 
 ## Ce qui a été livré
 
-1. **Socle.** Docker Compose, migrations Alembic, chargement des CSV, `GET /health`, score simulé `mock-0.1`, CI (tests, lint, build, scan des dépendances, démarrage de la base).
+1. **Socle.** Docker Compose, migrations Alembic, chargement des CSV, `GET /health`, CI (tests, lint, build, scan des dépendances, démarrage de la base).
 
 2. **Données servies.** Schéma `clean` reconstruit depuis `raw` à chaque migration, sans labels ni identités. Une facture invalide est rejetée avec un code et un motif (`422`), jamais par une erreur 500.
 
 3. **Pseudonymisation.** L'assuré dans `clean` est un HMAC. Le coffre `identites.coffre` est chiffré. L'année de naissance est remplacée par une tranche d'âge. Ré-identification et effacement passent par une clef admin et laissent un audit sans le nom. Pièces dans `docs/02-conformite/`.
 
-4. **Modèle du membre 1.** Registre des fiches `baseline`, `v1` et `v2`. Seul `v2` a des poids (`models/v2/model.joblib`). Le score, la version et les contributions SHAP sont stockés. Un changement de version ne coupe pas l'API. Si la version ne peut pas scorer, la facture n'est pas enregistrée (`503`, `MODELE_INDISPONIBLE`).
+4. **Modèle du membre 1.** Registre des fiches `v1` et `v2`, 23 variables. Le score attend `models/<version>/model.joblib`. Le score, la version et les contributions SHAP sont stockés. Un changement de version ne coupe pas l'API. Si la version ne peut pas scorer, la facture n'est pas enregistrée (`503`, `MODELE_INDISPONIBLE`).
 
 5. **Parcours API, quatre rôles.** Connexion par jeton. Prestataire : déposer une facture ou un lot. Assuré : lire ses remboursements. Gestionnaire : file d'alertes, rapport SHAP, décision (`valider`, `rejeter`, `complement`). Administrateur : seuil, canaux, version du modèle. Un mauvais rôle reçoit `403`. Contrat : `docs/05-api/`.
 

@@ -1,13 +1,12 @@
-import hashlib
 import logging
 from pathlib import Path
 
 from app.schemas.prediction import Contribution, Prediction
 from app.services.features import LIBELLES
-from app.services.registry import VERSION_SIMULEE, ModeleIndisponible, charger_fiche
+from app.services.registry import ModeleIndisponible, charger_fiche
 
 logger = logging.getLogger(__name__)
-MODEL_VERSION = VERSION_SIMULEE
+MODEL_VERSION = "v2"
 
 
 def predict(
@@ -17,9 +16,7 @@ def predict(
     models_dir: str = "models",
     variables: dict | None = None,
 ) -> Prediction:
-    """Point d'entrée unique. Le mock et le pipeline v2 passent par ici."""
-    if version == MODEL_VERSION:
-        return _simuler(facture_id, alert_threshold)
+    """Point d'entrée unique. Seul le pipeline enregistré répond."""
     fiche = charger_fiche(Path(models_dir), version)
     if not fiche.artefact_present:
         raise ModeleIndisponible(f"{version}: model.joblib absent")
@@ -70,25 +67,6 @@ def enregistrer(connection, prediction: Prediction, duree_ms: int | None = None)
             ),
         )
     return prediction_id
-
-
-def _simuler(facture_id: str, alert_threshold: float) -> Prediction:
-    digest = hashlib.sha256(facture_id.encode()).hexdigest()
-    score = int(digest[:8], 16) / 0xFFFFFFFF
-    rounded = round(score, 6)
-    return Prediction(
-        facture_id=facture_id,
-        score=rounded,
-        classe="alerte" if rounded >= alert_threshold else "normale",
-        model_version=MODEL_VERSION,
-        explications=[
-            Contribution(
-                variable="mock",
-                contribution=round(rounded - alert_threshold, 6),
-                libelle="Score simulé, en attente du modèle",
-            )
-        ],
-    )
 
 
 def _scorer(

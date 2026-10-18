@@ -5,7 +5,7 @@ def test_health_ok(client, monkeypatch) -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["database"] == "ok"
-    assert body["model_version"] == "mock-0.1"
+    assert body["model_version"] == "v2"
 
 
 def test_origine_distante_autorisee(client) -> None:

@@ -8,7 +8,7 @@ from app.core.tokens import emettre, hacher, lire_jeton, verifier
 from app.schemas.prediction import Contribution, Prediction
 from app.services import flux, metrics, notify, reglages
 from app.services.inference import predict as predict_reel
-from app.services.registry import VERSION_SIMULEE, ModeleIndisponible
+from app.services.registry import ModeleIndisponible
 
 
 class Lignes:
@@ -35,7 +35,7 @@ class Memoire:
     def __init__(self):
         self.settings = {
             "alert_threshold": "0",
-            "active_model_version": VERSION_SIMULEE,
+            "active_model_version": "v2",
             "notification_channels": "webhook",
             "n8n_webhook_url": "",
         }
@@ -60,6 +60,8 @@ class Memoire:
     def execute(self, requete, params=None):
         texte = " ".join(requete.split())
         params = params or ()
+        if "tarif_max" in texte:
+            return Lignes([])
         if "clean.referentiel_actes" in texte:
             return Lignes([("CONS-GEN",)])
         if "clean.referentiel_medicaments" in texte:
@@ -194,12 +196,29 @@ class Memoire:
                     if item["classe"] == "alerte" and item["facture_id"] not in closes
                 ]
             )
+        if texte.startswith("SELECT"):
+            return Lignes([])
         raise AssertionError(texte)
+
+
+def _predire(facture_id, alert_threshold, version="v2", models_dir="models", variables=None):
+    del models_dir, variables
+    score = _score(facture_id)
+    return Prediction(
+        facture_id=facture_id,
+        score=score,
+        classe="alerte" if score >= alert_threshold else "normale",
+        model_version=version,
+        explications=[
+            Contribution(variable="montant_total", contribution=score, libelle="Montant")
+        ],
+    )
 
 
 def _brancher(monkeypatch, memoire=None):
     base = memoire or Memoire()
     monkeypatch.setattr("app.db.session.psycopg.connect", lambda *_args, **_kwargs: base)
+    monkeypatch.setattr("app.services.flux.predict", _predire)
     return base
 
 
@@ -270,7 +289,7 @@ def test_facture_valide_scoree_avec_le_seuil_en_base(client, monkeypatch, entete
     assert response.status_code == 200
     body = response.json()
     assert body["valide"] is True
-    assert body["prediction"]["model_version"] == "mock-0.1"
+    assert body["prediction"]["model_version"] == "v2"
     assert body["prediction"]["classe"] == "alerte"
     assert body["notifie"] is False
     assert memoire.committed
@@ -327,18 +346,18 @@ def test_lot_melange(client, monkeypatch, entete) -> None:
     assert response.status_code == 200
     resultats = response.json()["resultats"]
     assert resultats[0]["statut_http"] == 200
-    assert resultats[0]["prediction"]["model_version"] == "mock-0.1"
+    assert resultats[0]["prediction"]["model_version"] == "v2"
     assert resultats[1]["statut_http"] == 422
     assert resultats[1]["valide"] is False
 
 
-def test_v2_recoit_les_variables_puis_le_mock_reprend(client, monkeypatch, entete) -> None:
+def test_v2_recoit_les_variables(client, monkeypatch, entete) -> None:
     memoire = _brancher(monkeypatch)
     memoire.settings["active_model_version"] = "v2"
     vus = {}
 
     def faux_predict(
-        facture_id, alert_threshold, version="mock-0.1", models_dir="models", variables=None
+        facture_id, alert_threshold, version="v2", models_dir="models", variables=None
     ):
         vus["version"] = version
         vus["variables"] = variables
@@ -347,7 +366,9 @@ def test_v2_recoit_les_variables_puis_le_mock_reprend(client, monkeypatch, entet
             score=0.1,
             classe="normale" if 0.1 < alert_threshold else "alerte",
             model_version=version,
-            explications=[Contribution(variable="mock", contribution=0.1, libelle="essai")],
+            explications=[
+                Contribution(variable="montant_total", contribution=0.1, libelle="essai")
+            ],
         )
 
     monkeypatch.setattr("app.services.flux.predict", faux_predict)
@@ -357,11 +378,11 @@ def test_v2_recoit_les_variables_puis_le_mock_reprend(client, monkeypatch, entet
     assert vus["variables"]["montant_total"] == 19000
     assert response.json()["prediction"]["model_version"] == "v2"
 
-    memoire.settings["active_model_version"] = VERSION_SIMULEE
+    memoire.settings["active_model_version"] = "absente"
     monkeypatch.setattr("app.services.flux.predict", predict_reel)
     retour = client.post("/invoices", json=_facture("FAC-RETOUR"), headers=entete())
-    assert retour.status_code == 200
-    assert retour.json()["prediction"]["model_version"] == "mock-0.1"
+    assert retour.status_code == 503
+    assert retour.json()["code"] == "MODELE_INDISPONIBLE"
 
 
 def test_modele_indisponible(client, monkeypatch, entete) -> None:
@@ -408,7 +429,7 @@ def test_lecture_reservee_au_deposant_puis_decision(client, monkeypatch, entete)
     lecture = client.get("/invoices/FAC-LU", headers=entete())
     assert lecture.status_code == 200
     assert lecture.json()["classe"] == "normale"
-    assert lecture.json()["model_version"] == "mock-0.1"
+    assert lecture.json()["model_version"] == "v2"
     shap = client.get("/predictions/FAC-LU", headers=entete())
     assert shap.status_code == 403
     rapport = client.get("/predictions/FAC-LU", headers=entete("gestionnaire"))
@@ -558,4 +579,4 @@ def test_lot_degrade(client, monkeypatch, entete) -> None:
     assert response.status_code == 200
     statuts = [item["statut_http"] for item in response.json()["resultats"]]
     assert statuts == [422, 422, 200]
-    assert response.json()["resultats"][2]["prediction"]["model_version"] == VERSION_SIMULEE
+    assert response.json()["resultats"][2]["prediction"]["model_version"] == "v2"

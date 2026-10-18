@@ -1,74 +1,67 @@
-"""Les 29 variables du pipeline v2, dans l'ordre vu à l'entraînement.
+"""Les 23 variables du pipeline v2, dans l'ordre vu à l'entraînement.
 
-Le modèle ne lit pas la facture brute. Cette fonction produit le tableau
-qu'il a vu : montants, ordonnance, dates de couverture, et répétition.
+Le modèle ne lit pas la facture brute. Les fenêtres de 7 jours comptent
+la facture en cours et les factures déjà connues du même assuré.
 """
 
+import re
 from datetime import date
 
 COLONNES_V2 = (
-    "type_facture",
-    "mode_reglement",
-    "canal_reception",
-    "montant_total",
-    "quantite_totale",
-    "montant_lignes_calcule",
-    "prix_unitaire_max",
-    "ratio_tarif_max",
-    "nb_lignes_sans_tarif",
-    "a_ordonnance",
-    "delai_ord_jours",
-    "ord_apres_soin",
     "ord_perimee",
-    "ord_autre_assure",
     "nb_lignes_non_prescrites",
     "nb_lignes_qte_excedentaire",
+    "presta_apres_fin_convention",
+    "ord_apres_soin",
+    "ord_autre_assure",
     "soin_avant_adhesion",
     "soin_apres_radiation",
-    "soin_avant_convention",
-    "presta_apres_fin_convention",
-    "mois_soin",
-    "jour_semaine_soin",
-    "nb_factures_meme_cle",
+    "ratio_tarif_max",
+    "prix_unitaire_max",
+    "montant_total",
     "repetition_potentielle",
     "nb_factures_meme_jour_prestataire",
-    "formule",
-    "type_prestataire",
-    "presta_specialite",
-    "niveau_tarif",
+    "type_facture",
+    "a_ordonnance",
+    "nb_factures_assure_7j",
+    "nb_factures_meme_code_7j",
+    "delai_heures_facture_precedente",
+    "montant_identique_48h",
+    "majoration_horaire_incoherente",
+    "ratio_tarif_referentiel_max",
+    "upcoding_specialite_suspect",
+    "soin_jour_ferme",
 )
 
 LIBELLES = {
-    "montant_total": "Montant total de la facture",
-    "quantite_totale": "Somme des quantités",
-    "montant_lignes_calcule": "Somme des montants de lignes",
-    "prix_unitaire_max": "Prix unitaire le plus élevé",
-    "ratio_tarif_max": "Plus fort écart au tarif de référence",
-    "nb_lignes_sans_tarif": "Lignes sans tarif de référence",
-    "a_ordonnance": "Présence d'une ordonnance",
-    "delai_ord_jours": "Jours entre la prescription et le soin",
-    "ord_apres_soin": "Ordonnance datée après le soin",
     "ord_perimee": "Ordonnance périmée",
-    "ord_autre_assure": "Ordonnance d'un autre assuré",
     "nb_lignes_non_prescrites": "Lignes absentes de l'ordonnance",
     "nb_lignes_qte_excedentaire": "Quantités au-dessus de la prescription",
+    "presta_apres_fin_convention": "Soin après la fin de convention",
+    "ord_apres_soin": "Ordonnance datée après le soin",
+    "ord_autre_assure": "Ordonnance d'un autre assuré",
     "soin_avant_adhesion": "Soin avant l'adhésion",
     "soin_apres_radiation": "Soin après la radiation",
-    "soin_avant_convention": "Soin avant le conventionnement",
-    "presta_apres_fin_convention": "Soin après la fin de convention",
-    "mois_soin": "Mois du soin",
-    "jour_semaine_soin": "Jour de la semaine",
-    "nb_factures_meme_cle": "Factures de même clé",
+    "ratio_tarif_max": "Plus fort écart à la grille du prestataire",
+    "prix_unitaire_max": "Prix unitaire le plus élevé",
+    "montant_total": "Montant total de la facture",
     "repetition_potentielle": "Répétition possible",
     "nb_factures_meme_jour_prestataire": "Factures du même prestataire le même jour",
     "type_facture": "Type de facture",
-    "mode_reglement": "Mode de règlement",
-    "canal_reception": "Canal de réception",
-    "formule": "Formule du contrat",
-    "type_prestataire": "Type de prestataire",
-    "presta_specialite": "Spécialité du prestataire",
-    "niveau_tarif": "Niveau de tarif",
+    "a_ordonnance": "Présence d'une ordonnance",
+    "nb_factures_assure_7j": "Factures de l'assuré sur 7 jours",
+    "nb_factures_meme_code_7j": "Même code revu sur 7 jours",
+    "delai_heures_facture_precedente": "Heures depuis la facture précédente",
+    "montant_identique_48h": "Même montant dans les 48 heures",
+    "majoration_horaire_incoherente": "Majoration nuit ou férié en horaire ouvert",
+    "ratio_tarif_referentiel_max": "Plus fort écart au tarif de référence",
+    "upcoding_specialite_suspect": "Acte spécialisé chez un prestataire généraliste",
+    "soin_jour_ferme": "Soin un jour de fermeture",
 }
+
+_MAJORATION = re.compile(r"nuit|dimanche|férié|ferie", re.IGNORECASE)
+_UPCODING = re.compile(r"URG|ENDOC|CARDIO|SPE", re.IGNORECASE)
+_PRESTATAIRE_LARGE = re.compile(r"GENERAL|PHARMA|CABINET", re.IGNORECASE)
 
 
 def construire_variables(
@@ -81,26 +74,19 @@ def construire_variables(
     contrat: dict | None = None,
     tarifs: dict[str, float] | None = None,
     historique: list[dict] | None = None,
+    referentiel: dict[str, dict] | None = None,
 ) -> dict:
+    del contrat
     tarifs = tarifs or {}
     historique = historique or []
     lignes_ordonnance = lignes_ordonnance or []
-    date_soin: date = facture["date_soin"]
-    quantites = [float(ligne["quantite"]) for ligne in lignes]
-    montants = [int(ligne["montant"]) for ligne in lignes]
+    referentiel = referentiel or {}
+    date_soin = _jour(facture["date_soin"])
     prix = [int(ligne["prix_unitaire"]) for ligne in lignes]
-    ratios = []
-    sans_tarif = 0
-    for ligne in lignes:
-        tarif = tarifs.get(ligne["code"])
-        if tarif is None or tarif == 0:
-            sans_tarif += 1
-            continue
-        ratios.append(int(ligne["prix_unitaire"]) / tarif)
     prescrit = {ligne["code"]: float(ligne["quantite"]) for ligne in lignes_ordonnance}
     non_prescrites = 0
     excedent = 0
-    if ordonnance is not None:
+    if ordonnance is not None or facture.get("ordonnance_id"):
         for ligne in lignes:
             qte = prescrit.get(ligne["code"])
             if qte is None:
@@ -109,62 +95,147 @@ def construire_variables(
                 excedent += 1
     delai = _delai(date_soin, ordonnance)
     validite = None if ordonnance is None else ordonnance.get("validite_jours")
-    cle_historique = sum(1 for autre in historique if _meme_cle(facture, autre))
-    nb_meme_cle = 1 + cle_historique
-    nb_meme_jour = 1 + sum(1 for autre in historique if _meme_jour_prestataire(facture, autre))
+    ratios_grille = []
+    ratios_ref = []
+    for ligne in lignes:
+        pratique = tarifs.get(ligne["code"])
+        if pratique not in (None, 0):
+            ratios_grille.append(int(ligne["prix_unitaire"]) / float(pratique))
+        info = referentiel.get(ligne["code"]) or {}
+        plafond = info.get("tarif_max") or info.get("tarif_reference")
+        if plafond not in (None, 0):
+            ratios_ref.append(int(ligne["prix_unitaire"]) / float(plafond))
+    nb_cle = 1 + sum(1 for autre in historique if _meme_cle(facture, autre))
+    nb_jour = 1 + sum(1 for autre in historique if _meme_jour_prestataire(facture, autre))
+    fenetre = [autre for autre in historique if _dans_sept_jours(date_soin, autre.get("date_soin"))]
+    precedente = _precedente(date_soin, historique)
+    delai_heures = None
+    if precedente is not None:
+        delai_heures = (_jour(date_soin) - _jour(precedente["date_soin"])).days * 24
     return {
-        "montant_total": int(facture["montant_total"]),
-        "quantite_totale": sum(quantites),
-        "montant_lignes_calcule": sum(montants),
-        "prix_unitaire_max": max(prix) if prix else None,
-        "ratio_tarif_max": max(ratios) if ratios else None,
-        "nb_lignes_sans_tarif": sans_tarif,
-        "a_ordonnance": 0 if ordonnance is None else 1,
-        "delai_ord_jours": delai,
-        "ord_apres_soin": int(delai is not None and delai < 0),
         "ord_perimee": int(delai is not None and validite is not None and delai > validite),
-        "ord_autre_assure": _autre_assure(facture, ordonnance),
-        "nb_lignes_non_prescrites": non_prescrites,
+        "nb_lignes_non_prescrites": non_prescrites
+        if facture.get("ordonnance_id") or ordonnance
+        else 0,
         "nb_lignes_qte_excedentaire": excedent,
+        "presta_apres_fin_convention": _apres(
+            date_soin, None if prestataire is None else prestataire.get("date_fin_convention")
+        ),
+        "ord_apres_soin": int(delai is not None and delai < 0),
+        "ord_autre_assure": _autre_assure(facture, ordonnance),
         "soin_avant_adhesion": _avant(
             date_soin, None if assure is None else assure.get("date_adhesion")
         ),
         "soin_apres_radiation": _apres(
             date_soin, None if assure is None else assure.get("date_radiation")
         ),
-        "soin_avant_convention": _avant(
-            date_soin, None if prestataire is None else prestataire.get("date_conventionnement")
-        ),
-        "presta_apres_fin_convention": _apres(
-            date_soin, None if prestataire is None else prestataire.get("date_fin_convention")
-        ),
-        "mois_soin": date_soin.month,
-        "jour_semaine_soin": date_soin.isoweekday(),
-        "nb_factures_meme_cle": nb_meme_cle,
-        "repetition_potentielle": int(nb_meme_cle > 1),
-        "nb_factures_meme_jour_prestataire": nb_meme_jour,
+        "ratio_tarif_max": max(ratios_grille) if ratios_grille else None,
+        "prix_unitaire_max": max(prix) if prix else None,
+        "montant_total": int(facture["montant_total"]),
+        "repetition_potentielle": int(nb_cle > 1),
+        "nb_factures_meme_jour_prestataire": nb_jour,
         "type_facture": facture.get("type_facture"),
-        "mode_reglement": facture.get("mode_reglement"),
-        "canal_reception": facture.get("canal_reception"),
-        "formule": None if contrat is None else contrat.get("formule"),
-        "type_prestataire": None if prestataire is None else prestataire.get("type_prestataire"),
-        "presta_specialite": None if prestataire is None else prestataire.get("specialite"),
-        "niveau_tarif": None if prestataire is None else prestataire.get("niveau_tarif"),
+        "a_ordonnance": int(bool(facture.get("ordonnance_id") or ordonnance is not None)),
+        "nb_factures_assure_7j": 1 + len(fenetre),
+        "nb_factures_meme_code_7j": _meme_code(lignes, fenetre),
+        "delai_heures_facture_precedente": delai_heures,
+        "montant_identique_48h": int(
+            precedente is not None
+            and delai_heures is not None
+            and delai_heures <= 48
+            and int(precedente["montant_total"]) == int(facture["montant_total"])
+        ),
+        "majoration_horaire_incoherente": _majoration(
+            date_soin, facture.get("heure_soin"), lignes, referentiel
+        ),
+        "ratio_tarif_referentiel_max": max(ratios_ref) if ratios_ref else None,
+        "upcoding_specialite_suspect": _upcoding(
+            lignes, None if prestataire is None else prestataire.get("type_prestataire")
+        ),
+        "soin_jour_ferme": _jour_ferme(
+            date_soin, None if prestataire is None else prestataire.get("jours_ouverture")
+        ),
     }
+
+
+def _jour(valeur) -> date:
+    if isinstance(valeur, date):
+        return valeur
+    return date.fromisoformat(str(valeur)[:10])
+
+
+def _dans_sept_jours(date_soin: date, autre) -> bool:
+    if autre is None:
+        return False
+    ecart = (_jour(date_soin) - _jour(autre)).days
+    return 0 <= ecart < 7
+
+
+def _precedente(date_soin: date, historique: list[dict]) -> dict | None:
+    candidats = [autre for autre in historique if _jour(autre["date_soin"]) <= date_soin]
+    if not candidats:
+        return None
+    return max(
+        candidats, key=lambda autre: (_jour(autre["date_soin"]), str(autre.get("facture_id") or ""))
+    )
+
+
+def _meme_code(lignes: list[dict], fenetre: list[dict]) -> int:
+    codes = [ligne["code"] for ligne in lignes]
+    if not codes:
+        return 1
+    comptes = []
+    for code in codes:
+        anterieurs = sum(1 for autre in fenetre if code in (autre.get("codes") or []))
+        comptes.append(1 + anterieurs)
+    return max(comptes)
+
+
+def _majoration(date_soin: date, heure, lignes: list[dict], referentiel: dict) -> int:
+    if date_soin.weekday() >= 5 or not _heure_ouverte(heure):
+        return 0
+    for ligne in lignes:
+        libelle = str((referentiel.get(ligne["code"]) or {}).get("libelle") or "")
+        if _MAJORATION.search(libelle):
+            return 1
+    return 0
+
+
+def _heure_ouverte(heure) -> bool:
+    if not heure or ":" not in str(heure):
+        return False
+    try:
+        heures = int(str(heure).split(":", 1)[0])
+    except ValueError:
+        return False
+    return 8 <= heures <= 17
+
+
+def _upcoding(lignes: list[dict], type_prestataire: str | None) -> int:
+    if not type_prestataire or _PRESTATAIRE_LARGE.search(type_prestataire) is None:
+        return 0
+    return int(any(_UPCODING.search(ligne["code"] or "") for ligne in lignes))
+
+
+def _jour_ferme(date_soin: date, jours_ouverture) -> int:
+    if jours_ouverture is None or str(jours_ouverture).strip() == "":
+        return 0
+    code = str(date_soin.weekday() + 1)
+    return int(code not in str(jours_ouverture))
 
 
 def _delai(date_soin: date, ordonnance: dict | None) -> int | None:
     if ordonnance is None or ordonnance.get("date_prescription") is None:
         return None
-    return (date_soin - ordonnance["date_prescription"]).days
+    return (date_soin - _jour(ordonnance["date_prescription"])).days
 
 
-def _avant(date_soin: date, borne: date | None) -> int:
-    return int(borne is not None and date_soin < borne)
+def _avant(date_soin: date, borne) -> int:
+    return int(borne is not None and date_soin < _jour(borne))
 
 
-def _apres(date_soin: date, borne: date | None) -> int:
-    return int(borne is not None and date_soin > borne)
+def _apres(date_soin: date, borne) -> int:
+    return int(borne is not None and date_soin > _jour(borne))
 
 
 def _autre_assure(facture: dict, ordonnance: dict | None) -> int:
@@ -177,7 +248,9 @@ def _meme_jour_prestataire(facture: dict, autre: dict) -> bool:
     presta = facture.get("prestataire_id")
     if not presta:
         return False
-    return autre.get("prestataire_id") == presta and autre.get("date_soin") == facture["date_soin"]
+    return autre.get("prestataire_id") == presta and _jour(autre.get("date_soin")) == _jour(
+        facture["date_soin"]
+    )
 
 
 def _meme_cle(facture: dict, autre: dict) -> bool:
@@ -185,5 +258,5 @@ def _meme_cle(facture: dict, autre: dict) -> bool:
         autre.get("assure_id") == facture.get("assure_id")
         and autre.get("prestataire_id") == facture.get("prestataire_id")
         and int(autre.get("montant_total")) == int(facture["montant_total"])
-        and autre.get("date_soin") == facture["date_soin"]
+        and _jour(autre.get("date_soin")) == _jour(facture["date_soin"])
     )

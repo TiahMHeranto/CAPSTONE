@@ -218,9 +218,9 @@ def main() -> int:
             "PATCH",
             "/admin/settings",
             "administrateur",
-            {"active_model_version": "mock-0.1"},
+            {"active_model_version": "v1"},
         )
-        verifier("vers mock", statut == 200 and appel("GET", "/health")[0] == 200, str(statut))
+        verifier("vers v1", statut == 200 and appel("GET", "/health")[0] == 200, str(statut))
         statut, _ = appel(
             "PATCH",
             "/admin/settings",

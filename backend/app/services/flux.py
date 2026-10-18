@@ -17,7 +17,7 @@ from app.services.prescriptions import charger, controler
 from app.services.prescriptions import enregistrer as noter_ordonnance
 from app.services.prescriptions import lister as lire_anomalies
 from app.services.referentiel import lire_codes
-from app.services.registry import VERSION_SIMULEE, ModeleIndisponible
+from app.services.registry import ModeleIndisponible
 from app.services.reglages import appliquer, lire, normaliser, vue
 
 logger = logging.getLogger(__name__)
@@ -103,11 +103,7 @@ def soumettre(connection, facture: FactureIn, acteur: str) -> tuple[int, dict, d
     anomalies = controler(connection, facture, ordonnance, lignes_ordonnance)
     debut = time.perf_counter()
     try:
-        variables = (
-            None
-            if version == VERSION_SIMULEE
-            else _variables(connection, facture, ordonnance, lignes_ordonnance)
-        )
+        variables = _variables(connection, facture, ordonnance, lignes_ordonnance)
         prediction = predict(
             facture.facture_id,
             seuil,
@@ -476,6 +472,7 @@ def _variables(
         contrat=_ligne_contrat(connection, facture.contrat_id),
         tarifs=_tarifs(connection, facture.prestataire_id),
         historique=_historique(connection, facture.assure_id),
+        referentiel=_referentiel(connection, [ligne.code for ligne in facture.lignes]),
     )
 
 
@@ -500,17 +497,7 @@ def _ligne_prestataire(connection, identifiant: str | None) -> dict | None:
         return None
     row = connection.execute(
         """
-        SELECT type_prestataire, specialite, niveau_tarif
-        FROM app.prestataires
-        WHERE prestataire_id = %s
-        """,
-        (identifiant,),
-    ).fetchone()
-    if row is not None:
-        return {"type_prestataire": row[0], "specialite": row[1], "niveau_tarif": row[2]}
-    row = connection.execute(
-        """
-        SELECT type_prestataire
+        SELECT type_prestataire, date_fin_convention, jours_ouverture
         FROM clean.prestataires
         WHERE prestataire_id = %s
         """,
@@ -518,7 +505,11 @@ def _ligne_prestataire(connection, identifiant: str | None) -> dict | None:
     ).fetchone()
     if row is None:
         return None
-    return {"type_prestataire": row[0], "specialite": None, "niveau_tarif": None}
+    return {
+        "type_prestataire": row[0],
+        "date_fin_convention": row[1],
+        "jours_ouverture": row[2],
+    }
 
 
 def _ligne_contrat(connection, identifiant: str | None) -> dict | None:
@@ -552,21 +543,56 @@ def _historique(connection, identifiant: str | None) -> list[dict]:
         return []
     rows = connection.execute(
         """
-        SELECT assure_id, prestataire_id, montant_total, date_soin
+        SELECT facture_id, assure_id, prestataire_id, montant_total, date_soin
         FROM clean.factures
         WHERE assure_id = %s
         """,
         (identifiant,),
     ).fetchall()
+    codes = _codes_historique(connection, identifiant)
     return [
         {
-            "assure_id": row[0],
-            "prestataire_id": row[1],
-            "montant_total": row[2],
-            "date_soin": row[3],
+            "facture_id": row[0],
+            "assure_id": row[1],
+            "prestataire_id": row[2],
+            "montant_total": row[3],
+            "date_soin": row[4],
+            "codes": codes.get(row[0], []),
         }
         for row in rows
     ]
+
+
+def _codes_historique(connection, identifiant: str) -> dict[str, list[str]]:
+    rows = connection.execute(
+        """
+        SELECT facture.facture_id, ligne.code
+        FROM clean.lignes_facture AS ligne
+        JOIN clean.factures AS facture ON facture.facture_id = ligne.facture_id
+        WHERE facture.assure_id = %s
+        """,
+        (identifiant,),
+    ).fetchall()
+    groupes: dict[str, list[str]] = {}
+    for facture_id, code in rows:
+        groupes.setdefault(facture_id, []).append(code)
+    return groupes
+
+
+def _referentiel(connection, codes: list[str]) -> dict[str, dict]:
+    if not codes:
+        return {}
+    rows = connection.execute(
+        """
+        SELECT code_acte, libelle, tarif_max, tarif_reference
+        FROM clean.referentiel_actes
+        WHERE code_acte = ANY(%s)
+        """,
+        (codes,),
+    ).fetchall()
+    return {
+        row[0]: {"libelle": row[1], "tarif_max": row[2], "tarif_reference": row[3]} for row in rows
+    }
 
 
 def _inserer_facture(connection, facture: FactureIn, acteur: str) -> None:

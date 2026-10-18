@@ -1,7 +1,7 @@
 """Registre des modèles livrés par le membre 1.
 
-v2 pointe vers `model.joblib`, le pipeline à 28 variables.
-baseline et v1 n'ont que leur fiche : les poids ne sont pas dans la livraison.
+v1 et v2 sont des pipelines XGBoost à 23 variables. Le score lit
+`models/<version>/model.joblib`. Il n'y a pas de score simulé.
 """
 
 import hashlib
@@ -29,8 +29,6 @@ COLONNES_INTERDITES = {
     "date_naissance",
     "diagnostic",
 }
-
-VERSION_SIMULEE = "mock-0.1"
 
 
 class ModeleIndisponible(LookupError):
@@ -63,8 +61,6 @@ def lister_fiches(models_dir: Path) -> list[FicheModele]:
 
 
 def charger_fiche(models_dir: Path, version: str) -> FicheModele:
-    if version == VERSION_SIMULEE:
-        raise ModeleIndisponible(version)
     meta_path = models_dir / version / "metadata.json"
     if not meta_path.is_file():
         raise ModeleIndisponible(version)
@@ -74,16 +70,17 @@ def charger_fiche(models_dir: Path, version: str) -> FicheModele:
 def _lire(meta_path: Path) -> FicheModele:
     brut = meta_path.read_bytes()
     meta = json.loads(brut.decode("utf-8"))
-    colonnes = tuple(meta["colonnes"])
+    colonnes = tuple(meta.get("features") or meta["colonnes"])
     interdites = sorted(set(colonnes) & COLONNES_INTERDITES)
     if interdites:
         raise SystemExit(f"colonnes interdites dans {meta['version']}: {','.join(interdites)}")
+    seuil = meta.get("seuil_alerte", meta.get("seuil"))
     return FicheModele(
         version=meta["version"],
         algorithme=meta["modele"],
-        seuil_metier=float(meta["seuil"]),
+        seuil_metier=float(seuil),
         colonnes=colonnes,
-        metriques=meta["resultats"],
+        metriques=meta.get("resultats_test") or meta.get("resultats") or {},
         metadata_sha256=hashlib.sha256(brut).hexdigest(),
         artefact_present=(meta_path.parent / "model.joblib").is_file(),
     )

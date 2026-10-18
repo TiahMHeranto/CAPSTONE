@@ -20,8 +20,10 @@ STEPS = [
         clean.referentiel_actes
     """,
     """
-    INSERT INTO clean.referentiel_actes (code_acte, libelle, categorie)
-    SELECT code_acte, libelle, categorie
+    INSERT INTO clean.referentiel_actes
+        (code_acte, libelle, categorie, tarif_reference, tarif_max)
+    SELECT code_acte, libelle, categorie,
+           clean.to_int(tarif_reference)::integer, clean.to_int(tarif_max)::integer
     FROM raw.referentiel_actes
     WHERE code_acte <> ''
       AND code_acte NOT IN (
@@ -40,8 +42,12 @@ STEPS = [
       )
     """,
     """
-    INSERT INTO clean.prestataires (prestataire_id, nom, type_prestataire, ville, statut)
-    SELECT prestataire_id, nom, type_prestataire, NULLIF(ville, ''), NULLIF(statut, '')
+    INSERT INTO clean.prestataires (
+        prestataire_id, nom, type_prestataire, ville, statut,
+        date_fin_convention, jours_ouverture
+    )
+    SELECT prestataire_id, nom, type_prestataire, NULLIF(ville, ''), NULLIF(statut, ''),
+           clean.to_date(date_fin_convention), NULLIF(jours_ouverture, '')
     FROM raw.prestataires
     WHERE prestataire_id <> ''
       AND prestataire_id NOT IN (
