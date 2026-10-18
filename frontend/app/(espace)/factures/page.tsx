@@ -14,13 +14,6 @@ type Dossier = {
   date_soin: string | null;
 };
 
-type Personne = { assure_id: string; nom: string; ville?: string | null; rang?: string | null };
-type OrdonnanceOption = {
-  ordonnance_id: string;
-  date_prescription: string | null;
-  validite_jours: number | null;
-};
-type Code = { code: string; libelle?: string | null; type_ligne: string };
 type Ligne = {
   code: string;
   type_ligne: string;
@@ -45,21 +38,19 @@ export default function Page() {
   const [dateSoin, setDateSoin] = useState(aujourdHui);
   const [dateFacture, setDateFacture] = useState(aujourdHui);
   const [montant, setMontant] = useState(15000);
-  const [code, setCode] = useState("ACC-CESAR");
-  const [typeLigne, setTypeLigne] = useState("ACTE");
   const [assureId, setAssureId] = useState("");
   const [prestataireId, setPrestataireId] = useState("");
   const [ordonnanceId, setOrdonnanceId] = useState("");
+  const [contratId, setContratId] = useState("");
+  const [lignes, setLignes] = useState<Ligne[]>([
+    { code: "", type_ligne: "ACTE", quantite: 1, prix_unitaire: 15000, montant: 15000 },
+  ]);
   const [recherche, setRecherche] = useState("FAC-MODELE-0001");
   const [lot, setLot] = useState("");
   const [reponse, setReponse] = useState<Reponse | null>(null);
   const [dossier, setDossier] = useState<Dossier[]>([]);
-  const [personnes, setPersonnes] = useState<Personne[]>([]);
-  const [ordonnances, setOrdonnances] = useState<OrdonnanceOption[]>([]);
-  const [codes, setCodes] = useState<Code[]>([]);
   const [enCours, setEnCours] = useState(false);
   const [canal, setCanal] = useState("saisie");
-  const [lignesPdf, setLignesPdf] = useState<Ligne[] | null>(null);
   const [fichier, setFichier] = useState<File | null>(null);
 
   useEffect(() => {
@@ -72,38 +63,19 @@ export default function Page() {
         if (recu.status === 200) setDossier((recu.data.factures as Dossier[]) ?? []);
       });
     }
-    if (actuel === "prestataire") {
-      setCode("");
-      appel("/me/assures").then((recu) => {
-        if (recu.status === 200) setPersonnes((recu.data.personnes as Personne[]) ?? []);
-      });
-      appel("/me/referentiel").then((recu) => {
-        if (recu.status === 200) setCodes((recu.data.codes as Code[]) ?? []);
-      });
-    }
   }, []);
-
-  useEffect(() => {
-    if (role !== "prestataire" || !assureId) {
-      setOrdonnances([]);
-      return;
-    }
-    appel(`/me/ordonnances?assure_id=${encodeURIComponent(assureId)}`).then((recu) => {
-      if (recu.status === 200) setOrdonnances((recu.data.ordonnances as OrdonnanceOption[]) ?? []);
-    });
-  }, [role, assureId]);
 
   const peutDeposer = role === "prestataire" || role === "gestionnaire";
   const peutValider = role === "prestataire" || role === "gestionnaire" || role === "administrateur";
-  const estPrestataire = role === "prestataire";
-  const actes = codes.filter((item) => item.type_ligne === "ACTE");
-  const medicaments = codes.filter((item) => item.type_ligne === "MEDICAMENT");
 
-  function choisirCode(valeur: string) {
-    setCode(valeur);
-    setLignesPdf(null);
-    const trouve = codes.find((item) => item.code === valeur);
-    if (trouve) setTypeLigne(trouve.type_ligne);
+  function modifierLigne(index: number, champLigne: keyof Ligne, valeur: string) {
+    setLignes((actuelles) =>
+      actuelles.map((ligne, position) => {
+        if (position !== index) return ligne;
+        if (champLigne === "code" || champLigne === "type_ligne") return { ...ligne, [champLigne]: valeur };
+        return { ...ligne, [champLigne]: Number(valeur) };
+      }),
+    );
   }
 
   async function lirePdf() {
@@ -128,16 +100,11 @@ export default function Page() {
     if (typeof facture.date_facture === "string") setDateFacture(facture.date_facture);
     if (typeof facture.assure_id === "string") setAssureId(facture.assure_id);
     if (typeof facture.ordonnance_id === "string") setOrdonnanceId(facture.ordonnance_id);
-    if (typeof facture.prestataire_id === "string" && role !== "prestataire") {
-      setPrestataireId(facture.prestataire_id);
-    }
-    const lignes = Array.isArray(facture.lignes) ? (facture.lignes as Ligne[]) : [];
-    if (lignes[0]) {
-      setCode(lignes[0].code);
-      setTypeLigne(lignes[0].type_ligne);
-      setMontant(Number(facture.montant_total ?? lignes[0].montant));
-      setLignesPdf(lignes.length > 1 ? lignes : null);
-    }
+    if (typeof facture.contrat_id === "string") setContratId(facture.contrat_id);
+    if (typeof facture.prestataire_id === "string") setPrestataireId(facture.prestataire_id);
+    if (typeof facture.montant_total === "number") setMontant(facture.montant_total);
+    const lues = Array.isArray(facture.lignes) ? (facture.lignes as Ligne[]) : [];
+    if (lues.length) setLignes(lues);
     setCanal("pdf");
   }
 
@@ -150,18 +117,11 @@ export default function Page() {
       montant_total: Number(montant),
       devise: "MGA",
       canal_reception: canal,
-      prestataire_id: role === "prestataire" ? null : prestataireId || null,
+      prestataire_id: prestataireId || null,
       assure_id: assureId || null,
+      contrat_id: contratId || null,
       ordonnance_id: ordonnanceId || null,
-      lignes: lignesPdf ?? [
-        {
-          code,
-          type_ligne: typeLigne,
-          quantite: 1,
-          prix_unitaire: Number(montant),
-          montant: Number(montant),
-        },
-      ],
+      lignes,
     };
   }
 
@@ -250,10 +210,8 @@ export default function Page() {
               Lire le PDF
             </button>
           </div>
-          {lignesPdf ? (
-            <p className="mt-3 text-sm">
-              {lignesPdf.length} lignes seront déposées. Changer le code du formulaire revient à une seule ligne.
-            </p>
+          {canal === "pdf" && lignes.length > 1 ? (
+            <p className="mt-3 text-sm">{lignes.length} lignes lues, modifiables dans le formulaire.</p>
           ) : null}
         </Carte>
       ) : null}
@@ -287,106 +245,78 @@ export default function Page() {
                 className={champ}
                 type="number"
                 value={montant}
-                onChange={(event) => {
-                  setMontant(Number(event.target.value));
-                  setLignesPdf(null);
-                }}
+                onChange={(event) => setMontant(Number(event.target.value))}
               />
             </label>
-            {estPrestataire ? (
-              <label className="md:col-span-2">
-                <Etiquette>Assuré</Etiquette>
-                <select
-                  className={champ}
-                  value={assureId}
-                  onChange={(event) => {
-                    setAssureId(event.target.value);
-                    setOrdonnanceId("");
-                  }}
-                >
-                  <option value="">Choisir un nom</option>
-                  {personnes.map((personne) => {
-                    const precision = [personne.ville, personne.rang].filter(Boolean).join(" · ");
-                    return (
-                      <option key={personne.assure_id} value={personne.assure_id}>
-                        {personne.nom}
-                        {precision ? ` — ${precision}` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-            ) : (
-              <label>
-                <Etiquette>Pseudonyme assuré</Etiquette>
-                <input className={champ} value={assureId} onChange={(event) => setAssureId(event.target.value)} />
-              </label>
-            )}
             <label>
-              <Etiquette>Code référentiel</Etiquette>
-              {estPrestataire ? (
-                <select className={champ} value={code} onChange={(event) => choisirCode(event.target.value)}>
-                  <option value="">Choisir un acte ou un médicament</option>
-                  <optgroup label="Actes">
-                    {actes.map((item) => (
-                      <option key={item.code} value={item.code}>
-                        {item.code} — {item.libelle ?? ""}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Médicaments">
-                    {medicaments.map((item) => (
-                      <option key={item.code} value={item.code}>
-                        {item.code} — {item.libelle ?? ""}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-              ) : (
-                <input
-                  className={champ}
-                  value={code}
-                  onChange={(event) => {
-                    setCode(event.target.value);
-                    setLignesPdf(null);
-                  }}
-                />
-              )}
+              <Etiquette>Assuré</Etiquette>
+              <input className={champ} value={assureId} onChange={(event) => setAssureId(event.target.value)} />
             </label>
-            {estPrestataire ? null : (
-              <label>
-                <Etiquette>Type de ligne</Etiquette>
-                <select className={champ} value={typeLigne} onChange={(event) => setTypeLigne(event.target.value)}>
-                  <option value="ACTE">ACTE</option>
-                  <option value="MEDICAMENT">MEDICAMENT</option>
-                </select>
-              </label>
-            )}
-            <label className={estPrestataire ? "md:col-span-2" : undefined}>
+            <label>
               <Etiquette>Ordonnance</Etiquette>
-              {estPrestataire ? (
-                <select className={champ} value={ordonnanceId} onChange={(event) => setOrdonnanceId(event.target.value)}>
-                  <option value="">Sans ordonnance</option>
-                  {ordonnances.map((ligne) => (
-                    <option key={ligne.ordonnance_id} value={ligne.ordonnance_id}>
-                      {ligne.ordonnance_id} · {ligne.date_prescription ?? "—"} · {ligne.validite_jours ?? "—"} j
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input className={champ} value={ordonnanceId} onChange={(event) => setOrdonnanceId(event.target.value)} />
-              )}
+              <input className={champ} value={ordonnanceId} onChange={(event) => setOrdonnanceId(event.target.value)} />
             </label>
-            {estPrestataire ? null : (
-              <label className="md:col-span-2">
-                <Etiquette>Identifiant prestataire</Etiquette>
-                <input
-                  className={champ}
-                  value={prestataireId}
-                  onChange={(event) => setPrestataireId(event.target.value)}
-                />
-              </label>
-            )}
+            <label>
+              <Etiquette>Contrat</Etiquette>
+              <input className={champ} value={contratId} onChange={(event) => setContratId(event.target.value)} />
+            </label>
+            <label>
+              <Etiquette>Prestataire</Etiquette>
+              <input
+                className={champ}
+                value={prestataireId}
+                onChange={(event) => setPrestataireId(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {lignes.map((ligne, index) => (
+              <div key={index} className="grid gap-3 rounded-md border border-line p-3 md:grid-cols-5">
+                <label>
+                  <Etiquette>Code</Etiquette>
+                  <input
+                    className={champ}
+                    value={ligne.code}
+                    onChange={(event) => modifierLigne(index, "code", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <Etiquette>Type de ligne</Etiquette>
+                  <input
+                    className={champ}
+                    value={ligne.type_ligne}
+                    onChange={(event) => modifierLigne(index, "type_ligne", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <Etiquette>Quantité</Etiquette>
+                  <input
+                    className={champ}
+                    type="number"
+                    value={ligne.quantite}
+                    onChange={(event) => modifierLigne(index, "quantite", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <Etiquette>Prix</Etiquette>
+                  <input
+                    className={champ}
+                    type="number"
+                    value={ligne.prix_unitaire}
+                    onChange={(event) => modifierLigne(index, "prix_unitaire", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <Etiquette>Montant ligne</Etiquette>
+                  <input
+                    className={champ}
+                    type="number"
+                    value={ligne.montant}
+                    onChange={(event) => modifierLigne(index, "montant", event.target.value)}
+                  />
+                </label>
+              </div>
+            ))}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button className={boutonSecond} type="button" disabled={enCours} onClick={() => envoyer("/invoices/validate")}>
@@ -396,7 +326,7 @@ export default function Page() {
               <button
                 className={bouton}
                 type="button"
-                disabled={enCours || (estPrestataire && (!assureId || !code))}
+                disabled={enCours || !lignes.some((ligne) => ligne.code.trim())}
                 onClick={() => envoyer("/invoices")}
               >
                 Déposer et scorer
@@ -411,7 +341,7 @@ export default function Page() {
           <p className="text-sm">L&apos;assuré consulte ses factures. Il ne les dépose pas.</p>
         </Carte>
       )}
-      {peutDeposer && !estPrestataire ? (
+      {peutDeposer ? (
         <Carte titre="Lot">
           <form onSubmit={envoyerLot}>
             <Etiquette>JSON : une facture, ou une liste</Etiquette>
