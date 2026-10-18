@@ -28,3 +28,20 @@ export async function appel(
   }
   return { status: response.status, data };
 }
+
+export async function appelFichier(chemin: string, fichier: File): Promise<Reponse> {
+  const session = lireSession();
+  const headers: Record<string, string> = {};
+  if (session?.token) headers.Authorization = `Bearer ${session.token}`;
+  const corps = new FormData();
+  corps.append("fichier", fichier);
+  const response = await fetch(`/backend${chemin}`, { method: "POST", headers, body: corps });
+  let data: Record<string, unknown> = {};
+  try {
+    const recu = await response.json();
+    data = recu && typeof recu === "object" ? (recu as Record<string, unknown>) : { valeur: recu };
+  } catch {
+    data = { motif: "réponse illisible" };
+  }
+  return { status: response.status, data };
+}

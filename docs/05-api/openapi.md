@@ -39,6 +39,8 @@ Authorization: Bearer <jeton>
 
 Facture invalide : `422`, `valide` à faux, `rejets` avec un code et un motif. Le score n'est pas calculé. Une ligne est écrite dans `app.audit_log`.
 
+Lecture d'un PDF, sans dépôt. Le corps est un fichier `fichier`. La réponse remplit le formulaire : `moteur` (`pypdf` ou `tesseract`), `complet`, `champs_manquants`, `facture`. Un fichier qui n'est pas un PDF reçoit `422` `FICHIER_REFUSE`. Un PDF sans texte lisible reçoit `422` `PDF_SANS_TEXTE`. Si le workflow n8n ne répond pas, `503` `WORKFLOW_INDISPONIBLE`.
+
 Décision, rôle gestionnaire :
 
 ```http

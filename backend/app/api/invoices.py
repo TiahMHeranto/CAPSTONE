@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, File, Path, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.cleaning.validate import valider_facture
@@ -11,6 +11,13 @@ from app.db.session import ouvrir
 from app.schemas.facture import FactureIn
 from app.schemas.flux import DecisionIn, LotFacturesIn
 from app.services.flux import consulter_facture, decider, recevoir, recevoir_lot
+from app.services.ocr import (
+    TAILLE_MAX,
+    PdfIllisible,
+    WorkflowIndisponible,
+    demander_workflow,
+    lire_texte,
+)
 from app.services.referentiel import lire_codes
 
 logger = logging.getLogger(__name__)
@@ -21,6 +28,49 @@ _FACTURE = Path(pattern=r"^[A-Za-z0-9._-]{1,64}$")
 def charger_codes() -> tuple[set[str], set[str]]:
     with ouvrir() as connection:
         return lire_codes(connection)
+
+
+@router.post("/invoices/extract")
+def extract_invoice(
+    fichier: Annotated[UploadFile, File()],
+    _principal: Annotated[
+        Principal, Depends(exiger("prestataire", "gestionnaire", "administrateur"))
+    ],
+) -> JSONResponse:
+    contenu = fichier.file.read(TAILLE_MAX + 1)
+    if len(contenu) > TAILLE_MAX or not contenu.startswith(b"%PDF"):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "FICHIER_REFUSE",
+                "motif": "le fichier doit etre un PDF de 8 Mo au plus",
+            },
+        )
+    try:
+        texte, moteur = lire_texte(contenu)
+    except PdfIllisible:
+        logger.warning("pdf illisible")
+        return JSONResponse(
+            status_code=422,
+            content={"code": "PDF_ILLISIBLE", "motif": "le PDF ne peut pas etre lu"},
+        )
+    if not texte.strip():
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "PDF_SANS_TEXTE",
+                "motif": "aucune ligne lisible, ni dans le texte du PDF ni par OCR",
+            },
+        )
+    try:
+        resultat = demander_workflow(texte)
+    except WorkflowIndisponible:
+        return JSONResponse(
+            status_code=503,
+            content={"code": "WORKFLOW_INDISPONIBLE", "motif": "le workflow OCR ne repond pas"},
+        )
+    resultat["moteur"] = moteur
+    return JSONResponse(status_code=200, content=resultat)
 
 
 @router.post("/invoices/validate")

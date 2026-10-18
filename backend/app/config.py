@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     ollama_embed_model: str = "nomic-embed-text"
     rag_dir: str = "/corpus"
     assistant_cache_similarite: float = 0.92
+    n8n_ocr_url: str = "http://n8n:5678/webhook/ocr"
     agent_statement_timeout_ms: int = 10000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

@@ -1,0 +1,88 @@
+{
+  "id": "S42hzUxzWj7nHPBt",
+  "name": "PrediCare OCR facture",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ocr",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+      "name": "Reception",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const source = $('Reception').first().json;\nconst entetes = source.headers || {};\nconst clef = entetes['x-ocr-key'] || '';\nif (!clef || clef !== ($env.ADMIN_API_KEY || '')) {\n  return [{ json: { ok: false, code: 'CLEF_REFUSEE', motif: 'clef absente', complet: false, champs_manquants: [], facture: {} } }];\n}\nconst enveloppe = source.body && source.body.texte !== undefined ? source.body : source;\nconst texte = String(enveloppe.texte || '').slice(0, 20000);\n\nfunction norm(valeur) {\n  return valeur.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/\\s+/g, ' ').trim().toLowerCase();\n}\n\nfunction dateIso(valeur) {\n  const propre = valeur.trim();\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(propre)) return propre;\n  const morceau = propre.match(/^(\\d{2})[\\/. -](\\d{2})[\\/. -](\\d{4})$/);\n  if (morceau) return morceau[3] + '-' + morceau[2] + '-' + morceau[1];\n  return null;\n}\n\nfunction entier(valeur) {\n  const propre = valeur.trim().replace(/\\u00a0/g, ' ').replace(/\\s*(mga|ar)$/i, '').trim();\n  if (/^\\d{1,3}(?:[ .]\\d{3})+$/.test(propre)) return Number(propre.replace(/[ .]/g, ''));\n  if (/^\\d+$/.test(propre)) return Number(propre);\n  return null;\n}\n\nconst libelles = {\n  identifiant: 'facture_id',\n  numero: 'facture_id',\n  'numero facture': 'facture_id',\n  'n facture': 'facture_id',\n  facture: 'facture_id',\n  'facture id': 'facture_id',\n  type: 'type_facture',\n  'type facture': 'type_facture',\n  'type de facture': 'type_facture',\n  'date de soin': 'date_soin',\n  'date soin': 'date_soin',\n  'date des soins': 'date_soin',\n  'date de facture': 'date_facture',\n  'date facture': 'date_facture',\n  'date de reception': 'date_reception',\n  'montant total': 'montant_total',\n  montant: 'montant_total',\n  total: 'montant_total',\n  devise: 'devise',\n  prestataire: 'prestataire_id',\n  'prestataire id': 'prestataire_id',\n  assure: 'assure_id',\n  'assure id': 'assure_id',\n  contrat: 'contrat_id',\n  'contrat id': 'contrat_id',\n  ordonnance: 'ordonnance_id',\n  'ordonnance id': 'ordonnance_id',\n  'mode de reglement': 'mode_reglement'\n};\n\nconst trouves = {};\nconst lignes = [];\nconst ligneRe = /^([A-Za-z0-9._-]{1,64})\\s*[|;,]\\s*(ACTE|MEDICAMENT)\\s*[|;,]\\s*(\\d+(?:[.,]\\d+)?)\\s*[|;,]\\s*(\\d[\\d .]*)\\s*[|;,]\\s*(\\d[\\d .]*)\\s*$/i;\nfor (const brute of texte.split(/\\r?\\n/)) {\n  const ligne = brute.trim();\n  if (!ligne) continue;\n  const morceau = ligne.match(ligneRe);\n  if (morceau) {\n    const prix = entier(morceau[4]);\n    const montant = entier(morceau[5]);\n    const quantite = Number(morceau[3].replace(',', '.'));\n    if (prix === null || montant === null || !Number.isFinite(quantite)) continue;\n    lignes.push({\n      code: morceau[1],\n      type_ligne: morceau[2].toUpperCase(),\n      quantite,\n      prix_unitaire: prix,\n      montant\n    });\n    continue;\n  }\n  const separe = ligne.match(/^(.+?)\\s*[:=]\\s*(.+)$/) || ligne.match(/^(.+?)\\s+-\\s+(.+)$/);\n  if (!separe) continue;\n  const champ = libelles[norm(separe[1])];\n  if (!champ || Object.prototype.hasOwnProperty.call(trouves, champ)) continue;\n  const valeur = separe[2].trim().replace(/[.,;]+$/, '');\n  if (champ === 'date_soin' || champ === 'date_facture' || champ === 'date_reception') {\n    const iso = dateIso(valeur);\n    if (iso) trouves[champ] = iso;\n    continue;\n  }\n  if (champ === 'montant_total') {\n    const nombre = entier(valeur);\n    if (nombre !== null) trouves[champ] = nombre;\n    continue;\n  }\n  if (champ === 'devise') {\n    if (/^[A-Za-z]{3}$/.test(valeur)) trouves.devise = valeur.toUpperCase();\n    continue;\n  }\n  if (champ === 'type_facture' && /^[A-Za-z0-9 ._-]{1,40}$/.test(valeur)) {\n    trouves[champ] = valeur.replace(/\\s+/g, '_').toUpperCase();\n    continue;\n  }\n  if (/^[A-Za-z0-9._-]{1,64}$/.test(valeur)) trouves[champ] = valeur;\n}\nif (trouves.montant_total === undefined && lignes.length) {\n  trouves.montant_total = lignes.reduce((somme, ligne) => somme + ligne.montant, 0);\n}\nconst requis = ['facture_id', 'type_facture', 'date_soin', 'date_facture', 'montant_total'];\nconst manquants = requis.filter((champ) => trouves[champ] === undefined);\nif (!lignes.length) manquants.push('lignes');\nreturn [{\n  json: {\n    ok: true,\n    complet: manquants.length === 0,\n    champs_manquants: manquants,\n    facture: Object.assign({ lignes }, trouves)\n  }\n}];\n"
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+      "name": "Extraire",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+      "name": "Reponse",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Reception": {
+      "main": [
+        [
+          {
+            "node": "Extraire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire": {
+      "main": [
+        [
+          {
+            "node": "Reponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Indian/Antananarivo",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

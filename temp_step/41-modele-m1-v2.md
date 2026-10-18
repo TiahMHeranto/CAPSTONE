@@ -27,17 +27,10 @@ La fiche nouvelle ne correspond plus à l'ancien joblib ni au mock. Garder le mo
 
 `ruff check` passe. `pytest backend/tests` : 136 tests.
 
-Docker n'était pas démarré : la migration `016` n'est pas appliquée sur la base en cours, et `app.settings.active_model_version` peut encore valoir `mock-0.1`. Au prochain `docker compose up` :
-
-```text
-docker compose cp migrations/sql/016_features_v2.sql db:/tmp/016_features_v2.sql
-docker compose exec -T db psql -U prediccare -d prediccare -v ON_ERROR_STOP=1 -f /tmp/016_features_v2.sql
-```
-
-Puis `UPDATE app.settings SET value = 'v2' WHERE key = 'active_model_version';`
+Migration `016` appliquée sur la base en cours : 251 prestataires (`jours_ouverture` rempli, 9 dates de fin de convention), 58 actes (`tarif_max` et `tarif_reference` remplis). `active_model_version` vaut déjà `v2`. Alembic n'a pas été estampillé : l'image `migrate` ne contient pas encore `016`.
 
 Sans `models/v2/model.joblib` fourni par le membre 1, un dépôt reste en `503`. Le retour arrière prévu est `v1`, dès que son joblib est au même endroit.
 
 ## Ensuite
 
-Placer les poids `model.joblib` de `v2` (et de `v1` pour le retour arrière), appliquer `016`, puis déposer une facture et contrôler score, version et contributions.
+Placer les poids `model.joblib` de `v2` (et de `v1` pour le retour arrière), puis déposer une facture et contrôler score, version et contributions.

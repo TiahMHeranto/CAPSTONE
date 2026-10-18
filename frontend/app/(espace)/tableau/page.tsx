@@ -11,7 +11,7 @@ const PARCOURS: Record<Role, string[]> = {
   prestataire: [
     "Lire la fiche de son établissement, ses factures et ses ordonnances",
     "Valider une facture",
-    "Déposer une facture ou un lot",
+    "Déposer une facture saisie, un PDF ou un lot",
   ],
   assure: ["Lire son profil, son contrat, ses factures et ses ordonnances", "Voir ses remboursements"],
   gestionnaire: [

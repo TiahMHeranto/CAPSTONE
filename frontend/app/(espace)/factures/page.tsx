@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { Bandeau, Carte, Etiquette, bouton, boutonSecond, champ } from "@/components/ui";
-import { appel, type Reponse } from "@/lib/api";
+import { appel, appelFichier, type Reponse } from "@/lib/api";
 import { lireSession, type Role } from "@/lib/session";
 
 type Dossier = {
@@ -21,6 +21,13 @@ type OrdonnanceOption = {
   validite_jours: number | null;
 };
 type Code = { code: string; libelle?: string | null; type_ligne: string };
+type Ligne = {
+  code: string;
+  type_ligne: string;
+  quantite: number;
+  prix_unitaire: number;
+  montant: number;
+};
 
 function aujourdHui() {
   return new Date().toISOString().slice(0, 10);
@@ -51,6 +58,9 @@ export default function Page() {
   const [ordonnances, setOrdonnances] = useState<OrdonnanceOption[]>([]);
   const [codes, setCodes] = useState<Code[]>([]);
   const [enCours, setEnCours] = useState(false);
+  const [canal, setCanal] = useState("saisie");
+  const [lignesPdf, setLignesPdf] = useState<Ligne[] | null>(null);
+  const [fichier, setFichier] = useState<File | null>(null);
 
   useEffect(() => {
     const session = lireSession();
@@ -91,8 +101,36 @@ export default function Page() {
 
   function choisirCode(valeur: string) {
     setCode(valeur);
+    setLignesPdf(null);
     const trouve = codes.find((item) => item.code === valeur);
     if (trouve) setTypeLigne(trouve.type_ligne);
+  }
+
+  async function lirePdf() {
+    if (!fichier) return;
+    setEnCours(true);
+    const recu = await appelFichier("/invoices/extract", fichier);
+    setReponse(recu);
+    setEnCours(false);
+    if (recu.status !== 200) return;
+    const facture = (recu.data.facture ?? {}) as Record<string, unknown>;
+    if (typeof facture.facture_id === "string") setFactureId(facture.facture_id);
+    if (typeof facture.type_facture === "string") setTypeFacture(facture.type_facture);
+    if (typeof facture.date_soin === "string") setDateSoin(facture.date_soin);
+    if (typeof facture.date_facture === "string") setDateFacture(facture.date_facture);
+    if (typeof facture.assure_id === "string") setAssureId(facture.assure_id);
+    if (typeof facture.ordonnance_id === "string") setOrdonnanceId(facture.ordonnance_id);
+    if (typeof facture.prestataire_id === "string" && role !== "prestataire") {
+      setPrestataireId(facture.prestataire_id);
+    }
+    const lignes = Array.isArray(facture.lignes) ? (facture.lignes as Ligne[]) : [];
+    if (lignes[0]) {
+      setCode(lignes[0].code);
+      setTypeLigne(lignes[0].type_ligne);
+      setMontant(Number(facture.montant_total ?? lignes[0].montant));
+      setLignesPdf(lignes.length > 1 ? lignes : null);
+    }
+    setCanal("pdf");
   }
 
   function corps() {
@@ -103,10 +141,11 @@ export default function Page() {
       date_facture: dateFacture,
       montant_total: Number(montant),
       devise: "MGA",
+      canal_reception: canal,
       prestataire_id: role === "prestataire" ? null : prestataireId || null,
       assure_id: assureId || null,
       ordonnance_id: ordonnanceId || null,
-      lignes: [
+      lignes: lignesPdf ?? [
         {
           code,
           type_ligne: typeLigne,
@@ -187,6 +226,30 @@ export default function Page() {
         </form>
       </Carte>
       {peutValider ? (
+        <Carte titre="Importer une facture PDF">
+          <p className="mb-3 text-sm">
+            Deux entrées : ce PDF, ou la saisie du formulaire. La lecture remplit les champs. Le dépôt n&apos;a lieu
+            qu&apos;avec Déposer et scorer.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="text-sm"
+              type="file"
+              accept="application/pdf"
+              onChange={(event) => setFichier(event.target.files?.[0] ?? null)}
+            />
+            <button className={boutonSecond} type="button" disabled={enCours || !fichier} onClick={() => void lirePdf()}>
+              Lire le PDF
+            </button>
+          </div>
+          {lignesPdf ? (
+            <p className="mt-3 text-sm">
+              {lignesPdf.length} lignes seront déposées. Changer le code du formulaire revient à une seule ligne.
+            </p>
+          ) : null}
+        </Carte>
+      ) : null}
+      {peutValider ? (
         <Carte titre="Nouvelle facture">
           <div className="grid gap-3 md:grid-cols-2">
             <label>
@@ -216,7 +279,10 @@ export default function Page() {
                 className={champ}
                 type="number"
                 value={montant}
-                onChange={(event) => setMontant(Number(event.target.value))}
+                onChange={(event) => {
+                  setMontant(Number(event.target.value));
+                  setLignesPdf(null);
+                }}
               />
             </label>
             {estPrestataire ? (
@@ -269,7 +335,14 @@ export default function Page() {
                   </optgroup>
                 </select>
               ) : (
-                <input className={champ} value={code} onChange={(event) => setCode(event.target.value)} />
+                <input
+                  className={champ}
+                  value={code}
+                  onChange={(event) => {
+                    setCode(event.target.value);
+                    setLignesPdf(null);
+                  }}
+                />
               )}
             </label>
             {estPrestataire ? null : (
