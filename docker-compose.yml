@@ -136,6 +136,10 @@ services:
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8000}
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       EMAIL_WEBHOOK_URL: ${EMAIL_WEBHOOK_URL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n:/import:ro

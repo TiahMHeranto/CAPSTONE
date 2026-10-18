@@ -1,8 +1,9 @@
-"""Lecture d'un PDF de facture, puis extraction des champs par le workflow n8n.
+"""Lecture d'un PDF, puis extraction par le workflow n8n et le modèle local.
 
-Les règles de découpage sont les mêmes que `n8n/workflows/ocr.json`. Le PDF n'est pas enregistré.
+Le webhook reçoit le fichier. Ollama structure le texte. Le PDF n'est pas enregistré.
 """
 
+import base64
 import json
 import logging
 import re
@@ -61,11 +62,23 @@ _REQUIS = ("facture_id", "type_facture", "date_soin", "date_facture", "montant_t
 
 
 class WorkflowIndisponible(Exception):
-    pass
+    def __init__(
+        self,
+        code: str = "WORKFLOW_INDISPONIBLE",
+        motif: str = "le workflow OCR ne repond pas",
+    ) -> None:
+        self.code = code
+        self.motif = motif
 
 
 class PdfIllisible(Exception):
     pass
+
+
+class LectureRefusee(Exception):
+    def __init__(self, code: str, motif: str) -> None:
+        self.code = code
+        self.motif = motif
 
 
 def _norm(valeur: str) -> str:
@@ -200,31 +213,112 @@ def _tesseract(contenu: bytes) -> str:
     return "\n".join(morceaux)
 
 
-def demander_workflow(texte: str) -> dict:
+def lire_fichiers(fichiers: list[dict]) -> dict:
+    sortis = []
+    for index, fichier in enumerate(fichiers[:5]):
+        if not isinstance(fichier, dict):
+            continue
+        nom = (
+            fichier.get("filename")
+            if isinstance(fichier.get("filename"), str)
+            else f"fichier_{index}.pdf"
+        )
+        texte_fourni = fichier.get("texte") if isinstance(fichier.get("texte"), str) else ""
+        if texte_fourni.strip():
+            sortis.append(
+                {
+                    "index": index,
+                    "filename": nom,
+                    "texte": texte_fourni[:TEXTE_MAX],
+                    "moteur": "fourni",
+                }
+            )
+            continue
+        brut = fichier.get("base64")
+        if not isinstance(brut, str) or not brut:
+            continue
+        try:
+            contenu = base64.b64decode(brut, validate=False)
+        except Exception:
+            continue
+        if len(contenu) > TAILLE_MAX or not contenu.startswith(b"%PDF"):
+            continue
+        try:
+            texte, moteur = lire_texte(contenu)
+        except PdfIllisible:
+            continue
+        sortis.append({"index": index, "filename": nom, "texte": texte, "moteur": moteur})
+    return {"files": sortis}
+
+
+def demander_workflow(contenu: bytes, nom: str) -> dict:
     url = settings.n8n_ocr_url
     if not url.startswith(("http://", "https://")):
         raise WorkflowIndisponible
-    corps = json.dumps({"texte": texte[:TEXTE_MAX]}).encode("utf-8")
+    charge = {
+        "filename": nom or "facture.pdf",
+        "mime_type": "application/pdf",
+        "base64": base64.b64encode(contenu).decode("ascii"),
+    }
     requete = urllib.request.Request(
         url,
-        data=corps,
+        data=json.dumps(charge).encode("utf-8"),
         headers={"Content-Type": "application/json", "X-Ocr-Key": settings.admin_api_key},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(requete, timeout=8) as reponse:
+        with urllib.request.urlopen(requete, timeout=150) as reponse:
             recu = json.loads(reponse.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
         logger.warning("workflow ocr erreur=%s", type(exc).__name__)
         raise WorkflowIndisponible from exc
-    if not isinstance(recu, dict) or recu.get("ok") is False or "facture" not in recu:
-        logger.warning("workflow ocr reponse refusee")
+    if not isinstance(recu, dict):
         raise WorkflowIndisponible
-    return _normaliser(recu)
+    return _reponse_workflow(recu)
+
+
+def _reponse_workflow(recu: dict) -> dict:
+    if recu.get("ok") is False:
+        code = recu.get("code") if isinstance(recu.get("code"), str) else "WORKFLOW_INDISPONIBLE"
+        if code == "PDF_SANS_TEXTE":
+            raise LectureRefusee(code, "aucune ligne lisible, ni dans le texte du PDF ni par OCR")
+        if code == "FICHIER_REFUSE":
+            raise LectureRefusee(code, "le fichier doit etre un PDF de 8 Mo au plus")
+        if code == "EXTRACTION_ILLISIBLE":
+            raise LectureRefusee(code, "le modele n'a pas renvoye une facture lisible")
+        if code == "MODELE_INDISPONIBLE":
+            raise WorkflowIndisponible(code, "le modele local ne repond pas")
+        raise WorkflowIndisponible
+    brut = recu.get("factures")
+    if not isinstance(brut, list):
+        brut = [recu["facture"]] if isinstance(recu.get("facture"), dict) else []
+    factures = [_normaliser(item) for item in brut if isinstance(item, dict)]
+    if not factures:
+        raise LectureRefusee(
+            "EXTRACTION_ILLISIBLE", "le modele n'a pas renvoye une facture lisible"
+        )
+    premiere = factures[0]
+    return {
+        "complet": premiere["complet"],
+        "champs_manquants": premiere["champs_manquants"],
+        "facture": premiere["facture"],
+        "factures": factures,
+        "moteur": recu.get("moteur") if isinstance(recu.get("moteur"), str) else "ollama",
+    }
+
+
+def _entier_souple(valeur: object) -> int | None:
+    if isinstance(valeur, bool):
+        return None
+    if isinstance(valeur, int):
+        return valeur
+    if isinstance(valeur, float) and valeur.is_integer():
+        return int(valeur)
+    return None
 
 
 def _normaliser(recu: dict) -> dict:
-    brut = recu.get("facture") if isinstance(recu.get("facture"), dict) else {}
+    brut = recu.get("facture") if isinstance(recu.get("facture"), dict) else recu
     facture: dict = {}
     for champ in (
         "facture_id",
@@ -240,15 +334,28 @@ def _normaliser(recu: dict) -> dict:
         "mode_reglement",
     ):
         valeur = brut.get(champ)
-        if isinstance(valeur, str) and valeur:
-            facture[champ] = valeur
-    if isinstance(brut.get("montant_total"), int):
-        facture["montant_total"] = brut["montant_total"]
+        if not isinstance(valeur, str) or not valeur or valeur.lower() == "null":
+            continue
+        if champ in {"facture_id", "prestataire_id", "assure_id", "contrat_id", "ordonnance_id"}:
+            valeur = valeur.replace("/", "-").replace("\\", "-").replace(" ", "")
+        if champ in {"date_soin", "date_facture", "date_reception"}:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valeur):
+                continue
+        elif champ != "type_facture" and not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", valeur):
+            continue
+        elif champ == "type_facture" and not re.fullmatch(r"[A-Za-z0-9 ._-]{1,40}", valeur):
+            continue
+        facture[champ] = valeur
+    montant_total = _entier_souple(brut.get("montant_total"))
+    if montant_total is not None:
+        facture["montant_total"] = montant_total
     lignes = []
     for ligne in brut.get("lignes") or []:
         if not isinstance(ligne, dict) or not isinstance(ligne.get("code"), str):
             continue
-        if not all(isinstance(ligne.get(cle), int) for cle in ("prix_unitaire", "montant")):
+        prix = _entier_souple(ligne.get("prix_unitaire"))
+        montant = _entier_souple(ligne.get("montant"))
+        if prix is None or montant is None:
             continue
         quantite = ligne.get("quantite")
         if not isinstance(quantite, (int, float)):
@@ -261,12 +368,14 @@ def _normaliser(recu: dict) -> dict:
                 "code": ligne["code"],
                 "type_ligne": type_ligne,
                 "quantite": quantite,
-                "prix_unitaire": ligne["prix_unitaire"],
-                "montant": ligne["montant"],
+                "prix_unitaire": prix,
+                "montant": montant,
             }
         )
     facture["lignes"] = lignes
     facture["canal_reception"] = "pdf"
     facture.setdefault("devise", "MGA")
-    manquants = [item for item in recu.get("champs_manquants") or [] if isinstance(item, str)]
+    manquants = [champ for champ in _REQUIS if champ not in facture]
+    if not lignes:
+        manquants.append("lignes")
     return {"complet": not manquants, "champs_manquants": manquants, "facture": facture}

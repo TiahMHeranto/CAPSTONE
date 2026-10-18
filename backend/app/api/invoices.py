@@ -1,10 +1,12 @@
+import hmac
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Path, UploadFile
+from fastapi import APIRouter, Depends, File, Header, Path, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.cleaning.validate import valider_facture
+from app.config import settings
 from app.core.auth import exiger
 from app.core.tokens import Principal
 from app.db.session import ouvrir
@@ -13,10 +15,11 @@ from app.schemas.flux import DecisionIn, LotFacturesIn
 from app.services.flux import consulter_facture, decider, recevoir, recevoir_lot
 from app.services.ocr import (
     TAILLE_MAX,
+    LectureRefusee,
     PdfIllisible,
     WorkflowIndisponible,
     demander_workflow,
-    lire_texte,
+    lire_fichiers,
 )
 from app.services.referentiel import lire_codes
 
@@ -28,6 +31,29 @@ _FACTURE = Path(pattern=r"^[A-Za-z0-9._-]{1,64}$")
 def charger_codes() -> tuple[set[str], set[str]]:
     with ouvrir() as connection:
         return lire_codes(connection)
+
+
+@router.post("/invoices/ocr/lire")
+def lire_ocr(
+    payload: dict,
+    x_admin_key: Annotated[str | None, Header()] = None,
+) -> JSONResponse:
+    attendue = settings.admin_api_key
+    if not x_admin_key or not attendue or not hmac.compare_digest(x_admin_key, attendue):
+        return JSONResponse(
+            status_code=401,
+            content={"code": "NON_AUTORISE", "motif": "clef requise"},
+        )
+    fichiers = payload.get("files") if isinstance(payload, dict) else None
+    if not isinstance(fichiers, list):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "FICHIER_REFUSE",
+                "motif": "le fichier doit etre un PDF de 8 Mo au plus",
+            },
+        )
+    return JSONResponse(status_code=200, content=lire_fichiers(fichiers))
 
 
 @router.post("/invoices/extract")
@@ -46,30 +72,26 @@ def extract_invoice(
                 "motif": "le fichier doit etre un PDF de 8 Mo au plus",
             },
         )
+    nom = fichier.filename or "facture.pdf"
+    logger.info("ocr fichier=%s octets=%s", nom, len(contenu))
     try:
-        texte, moteur = lire_texte(contenu)
+        resultat = demander_workflow(contenu, nom)
     except PdfIllisible:
         logger.warning("pdf illisible")
         return JSONResponse(
             status_code=422,
             content={"code": "PDF_ILLISIBLE", "motif": "le PDF ne peut pas etre lu"},
         )
-    if not texte.strip():
+    except LectureRefusee as refus:
         return JSONResponse(
             status_code=422,
-            content={
-                "code": "PDF_SANS_TEXTE",
-                "motif": "aucune ligne lisible, ni dans le texte du PDF ni par OCR",
-            },
+            content={"code": refus.code, "motif": refus.motif},
         )
-    try:
-        resultat = demander_workflow(texte)
-    except WorkflowIndisponible:
+    except WorkflowIndisponible as exc:
         return JSONResponse(
             status_code=503,
-            content={"code": "WORKFLOW_INDISPONIBLE", "motif": "le workflow OCR ne repond pas"},
+            content={"code": exc.code, "motif": exc.motif},
         )
-    resultat["moteur"] = moteur
     return JSONResponse(status_code=200, content=resultat)
 
 

@@ -113,6 +113,14 @@ export default function Page() {
     setReponse(recu);
     setEnCours(false);
     if (recu.status !== 200) return;
+    const liste = Array.isArray(recu.data.factures) ? recu.data.factures : [];
+    if (liste.length > 1) {
+      const lotLu = liste.map((item) => {
+        const ligne = item as { facture?: unknown };
+        return ligne.facture ?? item;
+      });
+      setLot(JSON.stringify(lotLu));
+    }
     const facture = (recu.data.facture ?? {}) as Record<string, unknown>;
     if (typeof facture.facture_id === "string") setFactureId(facture.facture_id);
     if (typeof facture.type_facture === "string") setTypeFacture(facture.type_facture);
@@ -228,8 +236,8 @@ export default function Page() {
       {peutValider ? (
         <Carte titre="Importer une facture PDF">
           <p className="mb-3 text-sm">
-            Deux entrées : ce PDF, ou la saisie du formulaire. La lecture remplit les champs. Le dépôt n&apos;a lieu
-            qu&apos;avec Déposer et scorer.
+            Deux entrées : ce PDF, ou la saisie du formulaire. Le fichier part au workflow, le texte est lu sur
+            place, puis le modèle local remplit les champs. Le dépôt n&apos;a lieu qu&apos;avec Déposer et scorer.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <input

@@ -1,34 +1,31 @@
 # Fiche du workflow OCR
 
-Le fichier importable est `n8n/workflows/ocr.json`. Le script du nœud Extraire est `n8n/workflows/ocr.js`, recopié dans le JSON. Il ne contient ni secret ni nom.
+Le fichier importable est `n8n/workflows/ocr.json`. Il reprend la chaîne « dépôt, lecture, extraction, découpage », avec un webhook à la place d'un dossier Drive. Aucune clef Google, aucun Gemini. Le modèle est Ollama, déjà sur la machine (`llama3.2`).
 
 ## Déclencheur
 
-`POST /webhook/ocr`, reçu par le nœud Reception. L'API l'appelle après avoir lu le PDF, à l'URL `N8N_OCR_URL` (`http://n8n:5678/webhook/ocr` depuis le conteneur API).
+`POST /webhook/ocr`, nœud **Depot PDF**. L'API l'appelle quand un professionnel ou un gestionnaire envoie un PDF à `POST /invoices/extract`. Le corps JSON porte `filename`, `mime_type` et `base64`. Un envoi multipart (champ fichier) est lu aussi. L'en-tête `X-Ocr-Key` reprend la clef admin. Sans cette clef, la réponse est `CLEF_REFUSEE` et rien n'est extrait.
 
-Le corps est `{"texte": "..."}`. L'en-tête `X-Ocr-Key` reprend la clef admin. Un appel sans cette clef répond `401` et n'extrait rien.
-
-Le PDF n'est pas envoyé à n8n et n'est pas enregistré. Les exécutions réussies et en erreur ne sont pas conservées.
+Le PDF n'est pas conservé. Les exécutions ne sont pas enregistrées.
 
 ## Nœuds
 
-1. **Reception** attend le texte.
-2. **Extraire** repère les étiquettes (`Identifiant`, `Type`, `Date de soin`, `Date de facture`, `Montant total`, `Assure`, `Prestataire`, `Ordonnance`, `Contrat`) et les lignes `code | ACTE ou MEDICAMENT | quantité | prix | montant`. Les dates `jj/mm/aaaa` deviennent `aaaa-mm-jj`. Un montant `15 000` devient `15000`.
-3. **Reponse** renvoie `complet`, `champs_manquants` et `facture`.
+1. **Regrouper fichiers** rassemble un ou plusieurs fichiers (nom, type, base64).
+2. **Lire le texte** appelle `POST http://api:8000/invoices/ocr/lire`. pypdf lit le texte intégré. Sinon Tesseract (français et anglais) lit l'image. Les deux sont dans l'image API.
+3. **Preparer le prompt** demande un JSON de factures : identifiants, dates, montant, lignes. Pas de nom, d'adresse, de téléphone, d'e-mail ni de CIN.
+4. **Extraction Ollama** envoie ce texte à `OLLAMA_URL/api/chat`.
+5. **Parser et eclater** découpe le tableau `invoices` en un item par facture.
+6. **Assembler** renvoie `{factures: [...]}` au webhook.
 
-L'API ajoute `canal_reception: pdf` et `moteur` (`pypdf` si le PDF contient du texte, `tesseract` si la page est une image). Tesseract et le français (`tesseract-ocr-fra`) sont dans l'image API. Aucun service payant.
-
-## Entrées
-
-La saisie du formulaire envoie `canal_reception: saisie`. L'import PDF remplit le même formulaire. Le dépôt reste `POST /invoices` : la lecture ne score pas.
+L'écran Factures remplit le formulaire avec la première facture. S'il y en a plusieurs, le lot du gestionnaire reçoit la liste. Le dépôt reste **Déposer et scorer** (`POST /invoices`) ou **Déposer le lot**. La lecture ne score pas.
 
 ## Import
 
 ```powershell
+docker compose up -d n8n
 docker compose exec -u node n8n n8n import:workflow --input=/import/workflows/ocr.json
-docker compose exec -u node n8n n8n list:workflow
-docker compose exec -u node n8n n8n update:workflow --id=<id> --active=true
+docker compose exec -u node n8n n8n update:workflow --id=S42hzUxzWj7nHPBt --active=true
 docker compose restart n8n
 ```
 
-Un PDF sans ligne lisible reçoit `422` `PDF_SANS_TEXTE`. Si n8n ne répond pas, `503` `WORKFLOW_INDISPONIBLE`.
+Un PDF sans texte reçoit `422` `PDF_SANS_TEXTE`. Si Ollama ou n8n ne répond pas, `503` `WORKFLOW_INDISPONIBLE`.

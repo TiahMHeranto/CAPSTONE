@@ -16,6 +16,7 @@
 |---|---|---|---|---|
 | `POST /assistant` | oui | oui | oui | oui |
 | `POST /invoices/extract` | oui | | oui | oui |
+| `POST /invoices/ocr/lire` | | | | clef admin, appelé par n8n |
 | `POST /invoices/validate` | oui | | oui | oui |
 | `POST /invoices`, `POST /invoices/batch` | oui | | oui | |
 | `GET /invoices/{id}` | ses dépôts | les siens | oui | oui |

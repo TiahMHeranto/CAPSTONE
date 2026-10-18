@@ -11,7 +11,7 @@
         "options": {}
       },
       "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
-      "name": "Reception",
+      "name": "Depot PDF",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
@@ -24,15 +24,193 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const source = $('Reception').first().json;\nconst entetes = source.headers || {};\nconst clef = entetes['x-ocr-key'] || '';\nif (!clef || clef !== ($env.ADMIN_API_KEY || '')) {\n  return [{ json: { ok: false, code: 'CLEF_REFUSEE', motif: 'clef absente', complet: false, champs_manquants: [], facture: {} } }];\n}\nconst enveloppe = source.body && source.body.texte !== undefined ? source.body : source;\nconst texte = String(enveloppe.texte || '').slice(0, 20000);\n\nfunction norm(valeur) {\n  return valeur.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/\\s+/g, ' ').trim().toLowerCase();\n}\n\nfunction dateIso(valeur) {\n  const propre = valeur.trim();\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(propre)) return propre;\n  const morceau = propre.match(/^(\\d{2})[\\/. -](\\d{2})[\\/. -](\\d{4})$/);\n  if (morceau) return morceau[3] + '-' + morceau[2] + '-' + morceau[1];\n  return null;\n}\n\nfunction entier(valeur) {\n  const propre = valeur.trim().replace(/\\u00a0/g, ' ').replace(/\\s*(mga|ar)$/i, '').trim();\n  if (/^\\d{1,3}(?:[ .]\\d{3})+$/.test(propre)) return Number(propre.replace(/[ .]/g, ''));\n  if (/^\\d+$/.test(propre)) return Number(propre);\n  return null;\n}\n\nconst libelles = {\n  identifiant: 'facture_id',\n  numero: 'facture_id',\n  'numero facture': 'facture_id',\n  'n facture': 'facture_id',\n  facture: 'facture_id',\n  'facture id': 'facture_id',\n  type: 'type_facture',\n  'type facture': 'type_facture',\n  'type de facture': 'type_facture',\n  'date de soin': 'date_soin',\n  'date soin': 'date_soin',\n  'date des soins': 'date_soin',\n  'date de facture': 'date_facture',\n  'date facture': 'date_facture',\n  'date de reception': 'date_reception',\n  'montant total': 'montant_total',\n  montant: 'montant_total',\n  total: 'montant_total',\n  devise: 'devise',\n  prestataire: 'prestataire_id',\n  'prestataire id': 'prestataire_id',\n  assure: 'assure_id',\n  'assure id': 'assure_id',\n  contrat: 'contrat_id',\n  'contrat id': 'contrat_id',\n  ordonnance: 'ordonnance_id',\n  'ordonnance id': 'ordonnance_id',\n  'mode de reglement': 'mode_reglement'\n};\n\nconst trouves = {};\nconst lignes = [];\nconst ligneRe = /^([A-Za-z0-9._-]{1,64})\\s*[|;,]\\s*(ACTE|MEDICAMENT)\\s*[|;,]\\s*(\\d+(?:[.,]\\d+)?)\\s*[|;,]\\s*(\\d[\\d .]*)\\s*[|;,]\\s*(\\d[\\d .]*)\\s*$/i;\nfor (const brute of texte.split(/\\r?\\n/)) {\n  const ligne = brute.trim();\n  if (!ligne) continue;\n  const morceau = ligne.match(ligneRe);\n  if (morceau) {\n    const prix = entier(morceau[4]);\n    const montant = entier(morceau[5]);\n    const quantite = Number(morceau[3].replace(',', '.'));\n    if (prix === null || montant === null || !Number.isFinite(quantite)) continue;\n    lignes.push({\n      code: morceau[1],\n      type_ligne: morceau[2].toUpperCase(),\n      quantite,\n      prix_unitaire: prix,\n      montant\n    });\n    continue;\n  }\n  const separe = ligne.match(/^(.+?)\\s*[:=]\\s*(.+)$/) || ligne.match(/^(.+?)\\s+-\\s+(.+)$/);\n  if (!separe) continue;\n  const champ = libelles[norm(separe[1])];\n  if (!champ || Object.prototype.hasOwnProperty.call(trouves, champ)) continue;\n  const valeur = separe[2].trim().replace(/[.,;]+$/, '');\n  if (champ === 'date_soin' || champ === 'date_facture' || champ === 'date_reception') {\n    const iso = dateIso(valeur);\n    if (iso) trouves[champ] = iso;\n    continue;\n  }\n  if (champ === 'montant_total') {\n    const nombre = entier(valeur);\n    if (nombre !== null) trouves[champ] = nombre;\n    continue;\n  }\n  if (champ === 'devise') {\n    if (/^[A-Za-z]{3}$/.test(valeur)) trouves.devise = valeur.toUpperCase();\n    continue;\n  }\n  if (champ === 'type_facture' && /^[A-Za-z0-9 ._-]{1,40}$/.test(valeur)) {\n    trouves[champ] = valeur.replace(/\\s+/g, '_').toUpperCase();\n    continue;\n  }\n  if (/^[A-Za-z0-9._-]{1,64}$/.test(valeur)) trouves[champ] = valeur;\n}\nif (trouves.montant_total === undefined && lignes.length) {\n  trouves.montant_total = lignes.reduce((somme, ligne) => somme + ligne.montant, 0);\n}\nconst requis = ['facture_id', 'type_facture', 'date_soin', 'date_facture', 'montant_total'];\nconst manquants = requis.filter((champ) => trouves[champ] === undefined);\nif (!lignes.length) manquants.push('lignes');\nreturn [{\n  json: {\n    ok: true,\n    complet: manquants.length === 0,\n    champs_manquants: manquants,\n    facture: Object.assign({ lignes }, trouves)\n  }\n}];\n"
+        "jsCode": "const source = $input.first();\nconst entetes = source.json.headers || {};\nconst clef = entetes['x-ocr-key'] || '';\nif (!clef || clef !== ($env.ADMIN_API_KEY || '')) {\n  return [{ json: { ok: false, code: 'CLEF_REFUSEE', stop: true, files: [], count: 0 } }];\n}\n\nconst files = [];\nconst binary = source.binary || {};\nfor (const key of Object.keys(binary)) {\n  const bin = binary[key];\n  if (!bin || !bin.data) continue;\n  files.push({\n    index: files.length,\n    filename: bin.fileName || key,\n    mime_type: bin.mimeType || 'application/pdf',\n    base64: bin.data\n  });\n}\n\nconst corps = source.json.body && typeof source.json.body === 'object' ? source.json.body : source.json;\nif (!files.length && Array.isArray(corps.files)) {\n  for (const fichier of corps.files) {\n    files.push({\n      index: files.length,\n      filename: fichier.filename || `fichier_${files.length}.pdf`,\n      mime_type: fichier.mime_type || 'application/pdf',\n      base64: fichier.base64 || null,\n      texte: fichier.texte || null\n    });\n  }\n}\nif (!files.length && (corps.base64 || corps.texte)) {\n  files.push({\n    index: 0,\n    filename: corps.filename || 'facture.pdf',\n    mime_type: corps.mime_type || 'application/pdf',\n    base64: corps.base64 || null,\n    texte: corps.texte || null\n  });\n}\n\nif (!files.length) {\n  return [{ json: { ok: false, code: 'FICHIER_REFUSE', stop: true, files: [], count: 0 } }];\n}\nreturn [{ json: { ok: true, stop: false, files, count: files.length } }];\n"
       },
-      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
-      "name": "Extraire",
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000000480",
+      "name": "Regrouper fichiers",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        520,
+        480,
         300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-stop",
+              "leftValue": "={{ $json.stop }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+      "name": "Arret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/invoices/ocr/lire",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Admin-Key",
+              "value": "={{ $env.ADMIN_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ files: $json.files }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "cccccccc-cccc-4ccc-8ccc-000000000960",
+      "name": "Lire le texte",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const files = Array.isArray($json.files) ? $json.files : [];\nconst utiles = files.filter((fichier) => String(fichier.texte || '').trim());\nif (!utiles.length) {\n  return [{ json: { ok: false, code: 'PDF_SANS_TEXTE', stop: true } }];\n}\n\nconst extraits = utiles.map((fichier) => ({\n  index: fichier.index,\n  filename: fichier.filename,\n  texte: String(fichier.texte).slice(0, 20000)\n}));\nconst consigne = [\n  'Tu recois le texte de factures de tiers payant, deja lu par OCR.',\n  'Reponds UNIQUEMENT avec un JSON, sans Markdown.',\n  'Forme attendue : {\"invoices\":[{\"index\":0,\"filename\":\"\",\"facture_id\":null,',\n  '\"type_facture\":null,\"date_soin\":null,\"date_facture\":null,\"montant_total\":null,',\n  '\"devise\":\"MGA\",\"prestataire_id\":null,\"assure_id\":null,\"contrat_id\":null,',\n  '\"ordonnance_id\":null,\"lignes\":[{\"code\":null,\"type_ligne\":\"ACTE\",\"quantite\":1,',\n  '\"prix_unitaire\":null,\"montant\":null}]}]}',\n  'Un objet par facture, dans le meme ordre. Les dates sont YYYY-MM-DD.',\n  'type_ligne vaut ACTE ou MEDICAMENT. Les montants sont des entiers, sans espace.',\n  'Chaque ligne du texte qui contient un code, ACTE ou MEDICAMENT, une quantite et deux montants va dans lignes.',\n  'N invente pas un identifiant absent du texte.',\n  'N extrais ni nom, ni adresse, ni telephone, ni e-mail, ni CIN.',\n  'Textes :',\n  JSON.stringify(extraits)\n].join('\\n');\n\nreturn [{\n  json: {\n    ok: true,\n    stop: false,\n    moteur: utiles[0].moteur || 'pypdf',\n    extraits,\n    requete: {\n      model: $env.OLLAMA_MODEL || 'llama3.2',\n      stream: false,\n      format: 'json',\n      messages: [{ role: 'user', content: consigne }]\n    }\n  }\n}];\n"
+      },
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000001200",
+      "name": "Preparer le prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-stop-2",
+              "leftValue": "={{ $json.stop }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5",
+      "name": "Texte absent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const url = ($env.OLLAMA_URL || 'http://host.docker.internal:11434').replace(/\\/$/, '') + '/api/chat';\ntry {\n  const recu = await this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    body: $json.requete,\n    json: true,\n    timeout: 120000\n  });\n  const raw = recu.message?.content ?? recu.response ?? '';\n  return [{ json: { raw, extraits: $json.extraits || [] } }];\n} catch (error) {\n  return [{ json: { error: 'modele', code: 'MODELE_INDISPONIBLE' } }];\n}\n"
+      },
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000001680",
+      "name": "Extraction Ollama",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const ligneRe = /^([A-Za-z0-9._-]{1,64})\\s*[|;,]\\s*(ACTE|MEDICAMENT)\\s*[|;,]\\s*(\\d+(?:[.,]\\d+)?)\\s*[|;,]\\s*(\\d[\\d .]*)\\s*[|;,]\\s*(\\d[\\d .]*)\\s*$/i;\n\nfunction entier(valeur) {\n  const propre = String(valeur).trim().replace(/\\u00a0/g, ' ').replace(/\\s*(mga|ar)$/i, '').trim();\n  if (/^\\d{1,3}(?:[ .]\\d{3})+$/.test(propre)) return Number(propre.replace(/[ .]/g, ''));\n  if (/^\\d+$/.test(propre)) return Number(propre);\n  return null;\n}\n\nfunction norm(valeur) {\n  return String(valeur || '')\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[°º]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .toLowerCase();\n}\n\nfunction jeton(valeur) {\n  const propre = String(valeur || '').trim().replace(/[\\\\/]/g, '-').replace(/\\s+/g, '');\n  if (/^[A-Za-z0-9._-]{1,64}$/.test(propre)) return propre;\n  return null;\n}\n\nfunction lignesTableau(texte) {\n  const brut = String(texte || '').split(/\\r?\\n/).map((ligne) => ligne.trim()).filter(Boolean);\n  const lignes = [];\n  const codeRe = /^[A-Z]{2,12}-[A-Z0-9]{2,16}$/;\n  for (let i = 0; i < brut.length; i += 1) {\n    if (!codeRe.test(brut[i]) || norm(brut[i]) === 'total') continue;\n    let curseur = i + 1;\n    if (curseur < brut.length && !codeRe.test(brut[curseur]) && entier(brut[curseur]) === null) curseur += 1;\n    const quantite = entier(brut[curseur]);\n    const prix = entier(brut[curseur + 1]);\n    const montant = entier(brut[curseur + 2]);\n    if (quantite === null || prix === null || montant === null) continue;\n    lignes.push({\n      code: brut[i],\n      type_ligne: brut[i].startsWith('MED') ? 'MEDICAMENT' : 'ACTE',\n      quantite,\n      prix_unitaire: prix,\n      montant\n    });\n    i = curseur + 2;\n  }\n  return lignes;\n}\n\nfunction champSuivant(brut, etiquettes) {\n  for (let i = 0; i < brut.length - 1; i += 1) {\n    if (etiquettes.includes(norm(brut[i]))) return brut[i + 1];\n  }\n  return null;\n}\n\nfunction completer(invoice, extrait) {\n  const texte = String((extrait && extrait.texte) || '');\n  const brut = texte.split(/\\r?\\n/).map((ligne) => ligne.trim()).filter(Boolean);\n  const numero = texte.match(/FACTURE\\s+N.?\\s*([A-Za-z0-9][A-Za-z0-9./_-]*)/i);\n  const fichier = String((extrait && extrait.filename) || '').replace(/\\.pdf$/i, '');\n  invoice.facture_id = jeton(numero && numero[1]) || jeton(invoice.facture_id) || jeton(fichier);\n  const type = champSuivant(brut, ['type']);\n  if (type && /^[A-Za-z0-9 ._-]{1,40}$/.test(type)) invoice.type_facture = type.replace(/\\s+/g, '_').toUpperCase();\n  const soin = champSuivant(brut, ['date des soins', 'date de soin']);\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(soin || '')) invoice.date_soin = soin;\n  const dateFacture = champSuivant(brut, ['date de facture']);\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(dateFacture || '')) invoice.date_facture = dateFacture;\n  invoice.assure_id = jeton(champSuivant(brut, ['n assure'])) || jeton(invoice.assure_id);\n  invoice.ordonnance_id = jeton(champSuivant(brut, ['ordonnance'])) || jeton(invoice.ordonnance_id);\n  const tableau = lignesTableau(texte);\n  const pipes = lignesDuTexte([{ texte }]);\n  if (tableau.length) invoice.lignes = tableau;\n  else if (!Array.isArray(invoice.lignes) || !invoice.lignes.length) invoice.lignes = pipes;\n  const total = entier(champSuivant(brut, ['total']));\n  invoice.montant_total = total !== null ? total : entier(invoice.montant_total);\n  if (invoice.montant_total === null && invoice.lignes.length) {\n    invoice.montant_total = invoice.lignes.reduce((somme, ligne) => somme + Number(ligne.montant), 0);\n  }\n}\n\nfunction lignesDuTexte(extraits) {\n  const lignes = [];\n  for (const extrait of extraits || []) {\n    for (const brute of String(extrait.texte || '').split(/\\r?\\n/)) {\n      const morceau = brute.trim().match(ligneRe);\n      if (!morceau) continue;\n      const prix = entier(morceau[4]);\n      const montant = entier(morceau[5]);\n      if (prix === null || montant === null) continue;\n      lignes.push({\n        code: morceau[1],\n        type_ligne: morceau[2].toUpperCase(),\n        quantite: Number(morceau[3].replace(',', '.')),\n        prix_unitaire: prix,\n        montant\n      });\n    }\n  }\n  return lignes;\n}\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  if (item.json.code === 'MODELE_INDISPONIBLE') {\n    results.push({ json: item.json });\n    continue;\n  }\n  const secours = lignesDuTexte(item.json.extraits);\n  const raw = item.json.raw ?? item.json.message?.content ?? item.json.output ?? item.json.text ?? '';\n  const cleaned = String(raw).replace(/```json|```/g, '').trim();\n  let parsed;\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (error) {\n    const debut = cleaned.indexOf('{');\n    const fin = cleaned.lastIndexOf('}');\n    try {\n      parsed = JSON.parse(cleaned.slice(debut, fin + 1));\n    } catch (encore) {\n      results.push({ json: { error: 'JSON invalide renvoye par le modele', raw: cleaned.slice(0, 500) } });\n      continue;\n    }\n  }\n  let invoices;\n  if (Array.isArray(parsed)) invoices = parsed;\n  else if (Array.isArray(parsed.invoices)) invoices = parsed.invoices;\n  else invoices = [parsed];\n  for (const invoice of invoices) {\n    const recues = Array.isArray(invoice.lignes) ? invoice.lignes : [];\n    const valides = recues.filter((ligne) => {\n      return ligne && jeton(ligne.code) && entier(ligne.prix_unitaire) !== null && entier(ligne.montant) !== null;\n    });\n    invoice.lignes = valides;\n    const index = Number.isInteger(invoice.index) ? invoice.index : 0;\n    completer(invoice, (item.json.extraits || [])[index] || (item.json.extraits || [])[0]);\n    if (!invoice.lignes.length) invoice.lignes = secours;\n    results.push({ json: invoice });\n  }\n}\n\nreturn results.length ? results : [{ json: { error: 'aucune facture' } }];\n"
+      },
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000001920",
+      "name": "Parser et eclater",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const factures = $input.all().map((item) => item.json);\nconst modele = factures.find((facture) => facture.code === 'MODELE_INDISPONIBLE');\nif (modele) {\n  return [{ json: { ok: false, code: 'MODELE_INDISPONIBLE', stop: true, factures: [] } }];\n}\nconst invalide = factures.some((facture) => facture.error);\nif (invalide) {\n  return [{ json: { ok: false, code: 'EXTRACTION_ILLISIBLE', stop: true, factures: [] } }];\n}\nreturn [{ json: { ok: true, moteur: 'ollama', factures } }];\n"
+      },
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000002160",
+      "name": "Assembler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { ok: false, code: 'LECTURE_INDISPONIBLE', stop: true, factures: [] } }];"
+      },
+      "id": "dddddddd-dddd-4ddd-8ddd-000000000960",
+      "name": "Echec lecture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        520
       ]
     },
     {
@@ -46,24 +224,133 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        800,
+        2400,
         300
       ]
     }
   ],
   "connections": {
-    "Reception": {
+    "Depot PDF": {
       "main": [
         [
           {
-            "node": "Extraire",
+            "node": "Regrouper fichiers",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extraire": {
+    "Regrouper fichiers": {
+      "main": [
+        [
+          {
+            "node": "Arret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Arret": {
+      "main": [
+        [
+          {
+            "node": "Reponse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lire le texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire le texte": {
+      "main": [
+        [
+          {
+            "node": "Preparer le prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Echec lecture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer le prompt": {
+      "main": [
+        [
+          {
+            "node": "Texte absent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texte absent": {
+      "main": [
+        [
+          {
+            "node": "Reponse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extraction Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraction Ollama": {
+      "main": [
+        [
+          {
+            "node": "Parser et eclater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser et eclater": {
+      "main": [
+        [
+          {
+            "node": "Assembler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assembler": {
+      "main": [
+        [
+          {
+            "node": "Reponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Echec lecture": {
       "main": [
         [
           {
@@ -79,7 +366,8 @@
     "executionOrder": "v1",
     "timezone": "Indian/Antananarivo",
     "saveDataSuccessExecution": "none",
-    "saveDataErrorExecution": "none"
+    "saveDataErrorExecution": "none",
+    "binaryMode": "separate"
   },
   "pinData": {},
   "meta": {

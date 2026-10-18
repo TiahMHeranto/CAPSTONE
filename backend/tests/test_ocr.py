@@ -1,8 +1,10 @@
+import base64
 import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.services.ocr import analyser_texte
 
 RACINE = Path(__file__).resolve().parents[2]
@@ -68,23 +70,58 @@ def test_analyse_signale_les_champs_absents() -> None:
     assert "lignes" in recu["champs_manquants"]
 
 
-def test_workflow_reprend_le_script() -> None:
+def test_workflow_recoit_un_fichier_et_appelle_ollama() -> None:
     workflow = json.loads((RACINE / "n8n" / "workflows" / "ocr.json").read_text(encoding="utf-8"))
-    script = (RACINE / "n8n" / "workflows" / "ocr.js").read_text(encoding="utf-8")
-    code = next(
-        noeud["parameters"]["jsCode"] for noeud in workflow["nodes"] if noeud["name"] == "Extraire"
-    )
-    assert code == script
+    noms = [noeud["name"] for noeud in workflow["nodes"]]
+    assert noms[0] == "Depot PDF"
     assert workflow["nodes"][0]["parameters"]["path"] == "ocr"
+    assert "Regrouper fichiers" in noms
+    assert "Extraction Ollama" in noms
+    assert "Parser et eclater" in noms
+    texte = json.dumps(workflow)
+    assert "google" not in texte.lower()
+    assert "gemini" not in texte.lower()
+    assert "host.docker.internal:11434" in texte
+    regrouper = (RACINE / "n8n" / "workflows" / "ocr-regrouper.js").read_text(encoding="utf-8")
+    code = next(
+        noeud["parameters"]["jsCode"]
+        for noeud in workflow["nodes"]
+        if noeud["name"] == "Regrouper fichiers"
+    )
+    assert code == regrouper
 
 
 def test_extract_remplit_depuis_le_pdf(client: TestClient, entete, monkeypatch) -> None:
-    from app.services.ocr import _normaliser
+    from app.services.ocr import _reponse_workflow
 
-    def faux(texte: str) -> dict:
-        recu = analyser_texte(texte)
-        recu["ok"] = True
-        return _normaliser(recu)
+    def faux(contenu: bytes, nom: str) -> dict:
+        assert contenu.startswith(b"%PDF")
+        assert nom == "facture.pdf"
+        return _reponse_workflow(
+            {
+                "ok": True,
+                "moteur": "ollama",
+                "factures": [
+                    {
+                        "facture_id": "FAC-OCR-1",
+                        "type_facture": "CONSULTATION",
+                        "date_soin": "2026-10-15",
+                        "date_facture": "2026-10-16",
+                        "montant_total": 15000,
+                        "email": "cache@example.test",
+                        "lignes": [
+                            {
+                                "code": "ACC-CESAR",
+                                "type_ligne": "ACTE",
+                                "quantite": 2,
+                                "prix_unitaire": 7500,
+                                "montant": 15000,
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
 
     monkeypatch.setattr("app.api.invoices.demander_workflow", faux)
     contenu = pdf_simple(TEXTE.strip().splitlines())
@@ -95,7 +132,8 @@ def test_extract_remplit_depuis_le_pdf(client: TestClient, entete, monkeypatch) 
     )
     assert reponse.status_code == 200
     corps = reponse.json()
-    assert corps["moteur"] == "pypdf"
+    assert corps["moteur"] == "ollama"
+    assert "email" not in corps["facture"]
     assert corps["facture"]["facture_id"] == "FAC-OCR-1"
     assert corps["facture"]["canal_reception"] == "pdf"
     assert corps["complet"] is True
@@ -120,10 +158,26 @@ def test_assure_ne_depose_pas(client: TestClient, entete) -> None:
     assert reponse.status_code == 403
 
 
+def test_modele_local_absent(client: TestClient, entete, monkeypatch) -> None:
+    from app.services.ocr import WorkflowIndisponible
+
+    def absent(_contenu: bytes, _nom: str) -> dict:
+        raise WorkflowIndisponible("MODELE_INDISPONIBLE", "le modele local ne repond pas")
+
+    monkeypatch.setattr("app.api.invoices.demander_workflow", absent)
+    reponse = client.post(
+        "/invoices/extract",
+        headers=entete("prestataire"),
+        files={"fichier": ("facture.pdf", b"%PDF-1.4", "application/pdf")},
+    )
+    assert reponse.status_code == 503
+    assert reponse.json()["code"] == "MODELE_INDISPONIBLE"
+
+
 def test_workflow_absent(client: TestClient, entete, monkeypatch) -> None:
     from app.services.ocr import WorkflowIndisponible
 
-    def absent(_texte: str) -> dict:
+    def absent(_contenu: bytes, _nom: str) -> dict:
         raise WorkflowIndisponible
 
     monkeypatch.setattr("app.api.invoices.demander_workflow", absent)
@@ -137,8 +191,38 @@ def test_workflow_absent(client: TestClient, entete, monkeypatch) -> None:
     assert reponse.json()["code"] == "WORKFLOW_INDISPONIBLE"
 
 
+def test_lire_le_pdf_pour_le_workflow(client: TestClient) -> None:
+    contenu = pdf_simple(TEXTE.strip().splitlines())
+    reponse = client.post(
+        "/invoices/ocr/lire",
+        headers={"X-Admin-Key": settings.admin_api_key},
+        json={
+            "files": [
+                {
+                    "filename": "facture.pdf",
+                    "base64": base64.b64encode(contenu).decode("ascii"),
+                }
+            ]
+        },
+    )
+    assert reponse.status_code == 200
+    fichiers = reponse.json()["files"]
+    assert fichiers[0]["moteur"] == "pypdf"
+    assert "FAC-OCR-1" in fichiers[0]["texte"]
+
+
+def test_lire_sans_clef(client: TestClient) -> None:
+    reponse = client.post("/invoices/ocr/lire", json={"files": []})
+    assert reponse.status_code == 401
+
+
 def test_pdf_sans_texte(client: TestClient, entete, monkeypatch) -> None:
-    monkeypatch.setattr("app.api.invoices.lire_texte", lambda _contenu: ("", "aucun"))
+    from app.services.ocr import LectureRefusee
+
+    def refus(_contenu: bytes, _nom: str) -> dict:
+        raise LectureRefusee("PDF_SANS_TEXTE", "aucune ligne lisible")
+
+    monkeypatch.setattr("app.api.invoices.demander_workflow", refus)
     reponse = client.post(
         "/invoices/extract",
         headers=entete("prestataire"),
