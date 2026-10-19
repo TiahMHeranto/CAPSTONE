@@ -85,8 +85,7 @@ def exemples_proches(question: str, nombre: int = 4) -> str:
         notes.append((len(mots & autres), exemple))
     notes.sort(key=lambda item: (-item[0], len(item[1]["question"])))
     return "\n\n".join(
-        f"Question: {exemple['question']}\n{exemple['sql']}"
-        for _note, exemple in notes[:nombre]
+        f"Question: {exemple['question']}\n{exemple['sql']}" for _note, exemple in notes[:nombre]
     )
 
 

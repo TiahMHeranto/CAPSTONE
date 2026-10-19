@@ -81,7 +81,7 @@ def test_workflow_recoit_un_fichier_et_appelle_ollama() -> None:
     texte = json.dumps(workflow)
     assert "google" not in texte.lower()
     assert "gemini" not in texte.lower()
-    assert "host.docker.internal:11434" in texte
+    assert "ollama:11434" in texte
     regrouper = (RACINE / "n8n" / "workflows" / "ocr-regrouper.js").read_text(encoding="utf-8")
     code = next(
         noeud["parameters"]["jsCode"]

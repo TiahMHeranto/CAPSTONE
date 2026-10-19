@@ -25,6 +25,7 @@ n8n écoute sur `http://localhost:5678`. Superset écoute sur `http://localhost:
 - interface Next.js
 - seuil d'alerte dans `app.settings`, initialisé depuis `ALERT_THRESHOLD`
 - n8n, pour l'alerte et la lecture d'un PDF
+- Ollama (`llama3.2` et `nomic-embed-text`), téléchargés au premier démarrage. Le port n'est pas publié.
 - Superset, sur les vues du schéma `bi`
 
 Les pièces de conformité sont dans `docs/02-conformite/` et la matrice des rôles dans `docs/05-api/matrice-roles.md`.
@@ -49,7 +50,7 @@ pip-audit -r backend/requirements.txt
 Deux entrées mènent au même dépôt.
 
 - Saisie manuelle dans l'écran Factures.
-- PDF : `POST /invoices/extract` envoie le fichier au workflow `n8n/workflows/ocr.json`, qui lit le texte puis interroge Ollama en local (`OLLAMA_MODEL`, par défaut `llama3.2`). Les champs reviennent dans le formulaire. Rien n'est scoré tant que l'utilisateur ne dépose pas. La lecture ne conserve ni nom, ni adresse, ni téléphone, ni e-mail, ni CIN.
+- PDF : `POST /invoices/extract` envoie le fichier au workflow `n8n/workflows/ocr.json`, qui lit le texte puis interroge Ollama dans la pile (`OLLAMA_MODEL`, par défaut `llama3.2`). Les champs reviennent dans le formulaire. Rien n'est scoré tant que l'utilisateur ne dépose pas. La lecture ne conserve ni nom, ni adresse, ni téléphone, ni e-mail, ni CIN.
 
 `POST /invoices/validate` réutilise les règles du passage `raw` → `clean`. Une facture invalide reçoit `422` avec un code et un motif, jamais une erreur 500. `POST /invoices` score une facture valide avec la version active et le seuil lu dans `app.settings`. Le résultat affiche le score, la classe et les contributions qui l'expliquent. Une facture invalide est rejetée avec un code et un motif, et une ligne d'audit. Le contrat est dans `docs/05-api/contrat-donnees.md`.
 

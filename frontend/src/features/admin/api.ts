@@ -1,9 +1,21 @@
 "use server";
 
-import { appel } from "@/lib/api/serveur";
+import { appel, appelFormulaire } from "@/lib/api/serveur";
 
 export async function sauverReglages(corps: Record<string, unknown>) {
   return appel("/admin/settings", { method: "PATCH", body: corps });
+}
+
+export async function etatCorpus() {
+  return appel("/admin/assistant/corpus");
+}
+
+export async function deposerCorpus(formData: FormData) {
+  return appelFormulaire("/admin/assistant/corpus", formData);
+}
+
+export async function majAssistant() {
+  return appel("/admin/assistant/reindex", { method: "POST" });
 }
 
 export async function creerCompte(corps: Record<string, unknown>) {

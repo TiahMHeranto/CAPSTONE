@@ -198,9 +198,7 @@ def _brancher(monkeypatch, journal: list, agent: list, outils: list[str]) -> Non
     monkeypatch.setattr("app.services.assistant.ouvrir_agent", lambda: _Agent(agent))
     monkeypatch.setattr("app.services.assistant.embarquer", lambda _texte: [0.1] * 768)
     monkeypatch.setattr("app.services.assistant.generer", lambda *_args: "reponse")
-    monkeypatch.setattr(
-        "app.services.assistant.choisir_outils", lambda _question, _role: outils
-    )
+    monkeypatch.setattr("app.services.assistant.choisir_outils", lambda _question, _role: outils)
     monkeypatch.setattr(
         "app.services.assistant.proposer_sql", lambda _question, erreur="": _SQL_LISTE
     )
@@ -211,9 +209,7 @@ def test_dossier_lit_seulement_le_compte_du_jeton(monkeypatch) -> None:
     agent: list = []
     _brancher(monkeypatch, journal, agent, ["query_database"])
 
-    statut, corps = repondre(
-        "où en est ma facture de ASS-999", Principal("s", "assure", "ASS-1")
-    )
+    statut, corps = repondre("où en est ma facture de ASS-999", Principal("s", "assure", "ASS-1"))
     assert statut == 200
     assert "ASS-999" not in (corps.get("requete") or "")
     assert "facture_id" in (corps.get("requete") or "")
@@ -224,9 +220,7 @@ def test_dossier_lit_seulement_le_compte_du_jeton(monkeypatch) -> None:
     journal.clear()
     agent.clear()
     repondre("où en est la facture", Principal("pharma", "prestataire", None, "PRE-9"))
-    prestataires = [
-        params for requete, params in agent if "prediccare.prestataire_id" in requete
-    ]
+    prestataires = [params for requete, params in agent if "prediccare.prestataire_id" in requete]
     assert prestataires == [("PRE-9",)]
 
     journal.clear()
@@ -252,9 +246,7 @@ def test_admin_lit_toute_la_base_sans_role_agent(monkeypatch) -> None:
     agent: list = []
     _brancher(monkeypatch, journal, agent, ["query_database"])
 
-    statut, corps = repondre(
-        "combien de factures au total", Principal("a", "administrateur", None)
-    )
+    statut, corps = repondre("combien de factures au total", Principal("a", "administrateur", None))
     assert statut == 200
     assert "dossier_factures" in (corps.get("requete") or "")
     assert agent == []

@@ -1,3 +1,7 @@
+import os
+
+os.environ["RAG_INDEX_AU_DEMARRAGE"] = "0"
+
 import pytest
 from fastapi.testclient import TestClient
 

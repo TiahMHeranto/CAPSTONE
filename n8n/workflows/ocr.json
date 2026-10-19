@@ -157,7 +157,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const url = ($env.OLLAMA_URL || 'http://host.docker.internal:11434').replace(/\\/$/, '') + '/api/chat';\ntry {\n  const recu = await this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    body: $json.requete,\n    json: true,\n    timeout: 120000\n  });\n  const raw = recu.message?.content ?? recu.response ?? '';\n  return [{ json: { raw, extraits: $json.extraits || [] } }];\n} catch (error) {\n  return [{ json: { error: 'modele', code: 'MODELE_INDISPONIBLE' } }];\n}\n"
+        "jsCode": "const url = ($env.OLLAMA_URL || 'http://ollama:11434').replace(/\\/$/, '') + '/api/chat';\ntry {\n  const recu = await this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    body: $json.requete,\n    json: true,\n    timeout: 120000\n  });\n  const raw = recu.message?.content ?? recu.response ?? '';\n  return [{ json: { raw, extraits: $json.extraits || [] } }];\n} catch (error) {\n  return [{ json: { error: 'modele', code: 'MODELE_INDISPONIBLE' } }];\n}\n"
       },
       "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000001680",
       "name": "Extraction Ollama",

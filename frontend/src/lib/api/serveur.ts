@@ -33,6 +33,17 @@ export async function appelFichier(chemin: string, fichier: File): Promise<Repon
   if (session) headers.Authorization = `Bearer ${session.token}`;
   const corps = new FormData();
   corps.append("fichier", fichier);
+  return envoyer(chemin, corps, headers);
+}
+
+export async function appelFormulaire(chemin: string, corps: FormData): Promise<Reponse> {
+  const session = await sessionOuVide();
+  const headers: Record<string, string> = {};
+  if (session) headers.Authorization = `Bearer ${session.token}`;
+  return envoyer(chemin, corps, headers);
+}
+
+async function envoyer(chemin: string, corps: FormData, headers: Record<string, string>): Promise<Reponse> {
   const response = await fetch(`${origine()}${chemin}`, {
     method: "POST",
     headers,

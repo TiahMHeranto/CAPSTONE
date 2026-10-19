@@ -39,9 +39,7 @@ def test_garde_fou() -> None:
     with pytest.raises(RequeteRefusee):
         valider("SELECT set_config('prediccare.assure_id', 'x', true)")
     with pytest.raises(RequeteRefusee):
-        valider(
-            "SELECT facture_id FROM clean.dossier_factures WHERE assure_id = 'ASS-1'"
-        )
+        valider("SELECT facture_id FROM clean.dossier_factures WHERE assure_id = 'ASS-1'")
     autorise = valider(
         "SELECT facture_id FROM clean.dossier_factures WHERE assure_id = 'ASS-1'",
         identifiants=True,

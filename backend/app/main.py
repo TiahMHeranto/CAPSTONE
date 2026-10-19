@@ -1,5 +1,6 @@
 import logging
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,7 +14,16 @@ from app.core.tokens import AccesRefuse
 configure_logging()
 logger = logging.getLogger("prediccare.http")
 
-app = FastAPI(title="PrediCare TPA", version="0.1.0")
+
+@asynccontextmanager
+async def duree_de_vie(_app: FastAPI):
+    from app.services.corpus import indexer_si_vide
+
+    indexer_si_vide()
+    yield
+
+
+app = FastAPI(title="PrediCare TPA", version="0.1.0", lifespan=duree_de_vie)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

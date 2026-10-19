@@ -178,9 +178,7 @@ def texte_recherche(question: str) -> str:
 def formule_citee(question: str) -> str | None:
     normalise = norm(question)
     trouves = [
-        nom
-        for nom in FORMULES
-        if re.search(r"(?<!\w)" + nom.lower() + r"(?!\w)", normalise)
+        nom for nom in FORMULES if re.search(r"(?<!\w)" + nom.lower() + r"(?!\w)", normalise)
     ]
     if len(trouves) == 1:
         return trouves[0]
