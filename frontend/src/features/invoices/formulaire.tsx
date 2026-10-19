@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { RiskBadge } from "@/components/domain/risk-badge";
+import { ScoreRing } from "@/components/domain/score-ring";
+import { ShapChart, type Explication } from "@/components/domain/shap-chart";
 import { Button, Champ, Etiquette } from "@/components/ui";
 import { envoyerFacture, lirePdf } from "@/features/invoices/api";
 import { factureSchema, type FactureSaisie } from "@/features/invoices/schemas/facture";
@@ -30,10 +33,18 @@ function vide(): FactureSaisie {
   };
 }
 
+type ResultatScore = {
+  factureId: string;
+  score: number;
+  classe: string | null;
+  version: string;
+  explications: Explication[];
+};
+
 export function FormulaireFacture({ peutDeposer }: { peutDeposer: boolean }) {
-  const router = useRouter();
   const [facture, setFacture] = useState<FactureSaisie>(vide);
   const [message, setMessage] = useState("");
+  const [resultat, setResultat] = useState<ResultatScore | null>(null);
   const [enCours, setEnCours] = useState(false);
 
   function maj(champ: keyof FactureSaisie, valeur: string) {
@@ -66,10 +77,16 @@ export function FormulaireFacture({ peutDeposer }: { peutDeposer: boolean }) {
       return;
     }
     setEnCours(true);
+    setResultat(null);
     const recu = await envoyerFacture(lu.data, valider);
     setEnCours(false);
-    if (recu.status === 200 && !valider) router.push(`/factures/${lu.data.facture_id}`);
-    else setMessage(recu.status === 200 ? t("factures.valider") : messageErreur(recu.data));
+    const score = !valider && recu.status === 200 ? lireScore(recu.data) : null;
+    if (score) {
+      setResultat(score);
+      setMessage("");
+      return;
+    }
+    setMessage(recu.status === 200 ? t("factures.valider") : messageErreur(recu.data));
   }
 
   return (
@@ -132,6 +149,7 @@ export function FormulaireFacture({ peutDeposer }: { peutDeposer: boolean }) {
         </div>
       ))}
       {message ? <p role="status">{message}</p> : null}
+      {resultat ? <ResultatDepot resultat={resultat} /> : null}
       <div className="flex flex-wrap gap-2">
         <Button variante="secondary" type="button" disabled={enCours} onClick={() => soumettre(true)}>
           {t("factures.valider")}
@@ -144,6 +162,59 @@ export function FormulaireFacture({ peutDeposer }: { peutDeposer: boolean }) {
       </div>
     </div>
   );
+}
+
+function ResultatDepot({ resultat }: { resultat: ResultatScore }) {
+  return (
+    <section className="rounded-lg border border-border bg-surface p-4" role="status">
+      <h2 className="text-xl font-semibold">{t("factures.resultat")}</h2>
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <ScoreRing valeur={resultat.score} classe={resultat.classe} />
+        <div>
+          <p className="font-mono">{resultat.factureId}</p>
+          <RiskBadge valeur={resultat.score} classe={resultat.classe} />
+          {resultat.version ? (
+            <p className="mt-1 text-sm text-muted">
+              {t("factures.version")} {resultat.version}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <h3 className="mb-2 mt-4 text-lg">{t("factures.pourquoiScore")}</h3>
+      <ShapChart lignes={resultat.explications} />
+      <p className="mt-3 text-sm">
+        <Link href={`/factures/${resultat.factureId}`}>{t("factures.ouvrir")}</Link>
+      </p>
+    </section>
+  );
+}
+
+function lireScore(data: Record<string, unknown>): ResultatScore | null {
+  const prediction = data.prediction;
+  if (!prediction || typeof prediction !== "object") return null;
+  const corps = prediction as Record<string, unknown>;
+  if (typeof corps.score !== "number") return null;
+  const explications = Array.isArray(corps.explications)
+    ? corps.explications.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const ligne = item as Record<string, unknown>;
+        if (typeof ligne.variable !== "string" || typeof ligne.contribution !== "number") return [];
+        return [
+          {
+            variable: ligne.variable,
+            contribution: ligne.contribution,
+            libelle: typeof ligne.libelle === "string" ? ligne.libelle : ligne.variable,
+          },
+        ];
+      })
+    : [];
+  return {
+    factureId: String(corps.facture_id ?? ""),
+    score: corps.score,
+    classe: typeof corps.classe === "string" ? corps.classe : null,
+    version: typeof corps.model_version === "string" ? corps.model_version : "",
+    explications,
+  };
 }
 
 function Saisie({

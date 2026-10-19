@@ -60,6 +60,13 @@ def lister_fiches(models_dir: Path) -> list[FicheModele]:
     return fiches
 
 
+def chemin_artefact(dossier: Path) -> Path | None:
+    chemin = dossier / "model.joblib"
+    if chemin.is_file():
+        return chemin
+    return None
+
+
 def charger_fiche(models_dir: Path, version: str) -> FicheModele:
     meta_path = models_dir / version / "metadata.json"
     if not meta_path.is_file():

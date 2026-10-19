@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.schemas.prediction import Contribution, Prediction
 from app.services.features import LIBELLES
-from app.services.registry import ModeleIndisponible, charger_fiche
+from app.services.registry import ModeleIndisponible, charger_fiche, chemin_artefact
 
 logger = logging.getLogger(__name__)
 MODEL_VERSION = "v2"
@@ -18,13 +18,12 @@ def predict(
 ) -> Prediction:
     """Point d'entrée unique. Seul le pipeline enregistré répond."""
     fiche = charger_fiche(Path(models_dir), version)
-    if not fiche.artefact_present:
+    chemin = chemin_artefact(Path(models_dir) / version)
+    if chemin is None:
         raise ModeleIndisponible(f"{version}: model.joblib absent")
     if variables is None:
         raise ModeleIndisponible(f"{version}: variables absentes")
-    score, explications = _scorer(
-        Path(models_dir) / version / "model.joblib", fiche.colonnes, variables
-    )
+    score, explications = _scorer(chemin, fiche.colonnes, variables)
     rounded = round(score, 6)
     return Prediction(
         facture_id=facture_id,
@@ -76,6 +75,7 @@ def _scorer(
         import pandas as pd
 
         pipeline = _charger(path)
+        _verifier_poids(pipeline, colonnes, path.parent.name)
         frame = pd.DataFrame([{colonne: variables.get(colonne) for colonne in colonnes}])
         score = float(pipeline.predict_proba(frame)[0, 1])
         return score, _contributions(pipeline, frame, colonnes)
@@ -98,6 +98,22 @@ def _charger(path: Path):
     import joblib
 
     return joblib.load(path)
+
+
+def _verifier_poids(pipeline, colonnes: tuple[str, ...], version: str) -> None:
+    prepare = pipeline.named_steps["preprocess"]
+    noms = getattr(prepare, "feature_names_in_", None)
+    if noms is None:
+        return
+    trouves = {str(nom) for nom in noms}
+    if trouves != set(colonnes):
+        logger.warning(
+            "poids incompatibles version=%s pipeline=%s fiche=%s",
+            version,
+            len(trouves),
+            len(colonnes),
+        )
+        raise ModeleIndisponible(f"{version}: colonnes du pipeline differentes de la fiche")
 
 
 def _contributions(pipeline, frame, colonnes: tuple[str, ...]) -> list[Contribution]:
