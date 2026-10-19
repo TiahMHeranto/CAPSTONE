@@ -131,7 +131,7 @@ export function Conversation({
   if (compact) {
     const date = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     return (
-      <div className="flex h-full min-h-0 flex-col bg-white text-foreground">
+      <div className="flex h-full min-h-0 flex-col bg-surface text-foreground">
         <div className="flex gap-1 border-b border-border px-3 py-2" role="tablist">
           <button
             type="button"
@@ -199,7 +199,7 @@ export function Conversation({
                   className={
                     message.role === "user"
                       ? "ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-foreground"
-                      : "max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-white px-3 py-2 text-sm"
+                      : "max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-sm"
                   }
                 >
                   {message.role === "assistant" ? <FormattedText texte={message.texte} /> : <p>{message.texte}</p>}
@@ -235,7 +235,7 @@ export function Conversation({
                 void envoyer(question);
               }}
             >
-              <div className="flex items-center gap-2 rounded-full border border-border bg-white pl-4 pr-1">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-surface pl-4 pr-1">
                 <label className="sr-only" htmlFor="question-widget">
                   {t("assistant.message")}
                 </label>
@@ -267,7 +267,7 @@ export function Conversation({
           </>
         )}
         {conseiller ? (
-          <dialog open className="rounded-2xl border border-border bg-white p-4 text-foreground">
+          <dialog open className="rounded-2xl border border-border bg-surface p-4 text-foreground">
             <p>{t("assistant.conseillerTexte")}</p>
             <Button className="mt-3" type="button" onClick={() => setConseiller(false)}>
               {t("annuler")}
