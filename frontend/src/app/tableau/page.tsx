@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { CarteAssistant } from "@/components/carte-assistant";
 import { Erreur } from "@/components/domain/etats";
 import { messageErreur, t } from "@/i18n/traduire";
 import { appel } from "@/lib/api/serveur";
 import { dateCourte, montant, score } from "@/lib/format";
+import { nomAffiche, prenomAffiche } from "@/lib/nom";
 import { lireSession } from "@/lib/session";
 import type { Reponse, Role } from "@/lib/types";
 import { redirect } from "next/navigation";
@@ -41,6 +43,22 @@ export default async function Page() {
   const latence = objet(metriques.latence_ms);
   const derive = objet(supervision?.data.derive);
 
+  if (session.role === "assure") {
+    return (
+      <VueAssure
+        nom={nomAffiche(profil)}
+        prenom={prenomAffiche(profil)}
+        contrat={contrat}
+        factures={lignesFactures}
+        ordonnances={lignesOrdonnances}
+        compteFactures={compter(lignesFactures, factures, PLAFOND_FACTURES)}
+        compteOrdonnances={compter(lignesOrdonnances, ordonnances, PLAFOND_ORDONNANCES)}
+        compteRemboursements={compter(lignesRemboursements, remboursements, PLAFOND_REMBOURSEMENTS)}
+        aucunRemboursement={remboursements?.status === 200 && lignesRemboursements.length === 0}
+      />
+    );
+  }
+
   return (
     <>
       <h1 className="text-3xl font-semibold">{t("nav.tableau")}</h1>
@@ -48,7 +66,7 @@ export default async function Page() {
       <section className="rounded-lg border border-border bg-surface p-4">
         <h2 className="mb-3 text-xl font-semibold">{t("nav.profil")}</h2>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <Ligne libelle={t("tableau.nom")} valeur={libelleNom(profil)} />
+          <Ligne libelle={t("tableau.nom")} valeur={nomAffiche(profil) || "—"} />
           <Ligne libelle={t("role")} valeur={t(`roles.${session.role}`)} />
           <Ligne libelle={t("tableau.contrat")} valeur={texte(contrat.contrat_id)} />
           <Ligne libelle={t("tableau.formule")} valeur={texte(contrat.formule)} />
@@ -83,14 +101,6 @@ export default async function Page() {
               plafond={lignesOrdonnances.length >= PLAFOND_ORDONNANCES}
             />
           </>
-        ) : null}
-        {session.role === "assure" ? (
-          <Indicateur
-            href="/remboursements"
-            titre={t("tableau.remboursements")}
-            valeur={compter(lignesRemboursements, remboursements, PLAFOND_REMBOURSEMENTS)}
-            plafond={lignesRemboursements.length >= PLAFOND_REMBOURSEMENTS}
-          />
         ) : null}
         {bureau ? (
           <>
@@ -217,17 +227,6 @@ function Liste({ titre, children }: { titre: string; children: ReactNode }) {
   );
 }
 
-function libelleNom(profil: Record<string, unknown>): string {
-  const nom = profil.nom;
-  if (typeof nom === "string" && nom.trim()) return nom.trim();
-  if (nom && typeof nom === "object") {
-    const fiche = nom as Record<string, unknown>;
-    const complet = [fiche.prenoms, fiche.nom].filter((part) => typeof part === "string" && part).join(" ");
-    if (complet) return complet;
-  }
-  return "—";
-}
-
 function compter(lignes: Record<string, unknown>[], recu: Reponse | null, plafond: number): string {
   if (!recu || recu.status !== 200) return "—";
   if (lignes.length >= plafond) return `${lignes.length}+`;
@@ -266,4 +265,234 @@ function texte(valeur: unknown): string {
 
 function vide(): Promise<Reponse | null> {
   return Promise.resolve(null);
+}
+
+function dateLongue(valeur: string): string {
+  if (!valeur) return "—";
+  const date = new Date(valeur);
+  if (Number.isNaN(date.getTime())) return valeur.slice(0, 10);
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
+function VueAssure({
+  nom,
+  prenom,
+  contrat,
+  factures,
+  ordonnances,
+  compteFactures,
+  compteOrdonnances,
+  compteRemboursements,
+  aucunRemboursement,
+}: {
+  nom: string;
+  prenom: string;
+  contrat: Record<string, unknown>;
+  factures: Record<string, unknown>[];
+  ordonnances: Record<string, unknown>[];
+  compteFactures: string;
+  compteOrdonnances: string;
+  compteRemboursements: string;
+  aucunRemboursement: boolean;
+}) {
+  const formule = texte(contrat.formule);
+  const actif = String(contrat.statut ?? "").toLowerCase() === "actif";
+  return (
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
+      <div className="space-y-4">
+        <header>
+          <h1 className="text-3xl font-semibold">{prenom ? `${t("tableau.bonjour")}, ${prenom}` : t("tableau.bonjour")}</h1>
+          <p className="mt-1 text-sm text-muted">{t("tableau.introAssure")}</p>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Compteur href="/factures" icone="facture" titre={t("tableau.factures")} valeur={compteFactures} lien={t("tableau.voirFactures")} />
+          <Compteur href="/ordonnances" icone="ordonnance" titre={t("tableau.ordonnances")} valeur={compteOrdonnances} lien={t("tableau.voirOrdonnances")} />
+          <Compteur
+            href="/remboursements"
+            icone="remboursement"
+            titre={t("tableau.remboursements")}
+            valeur={compteRemboursements}
+            lien={aucunRemboursement ? "" : t("tableau.voirRemboursements")}
+            note={aucunRemboursement ? t("tableau.aucunRemboursement") : ""}
+          />
+        </div>
+        <Tableau
+          titre={t("tableau.recentes")}
+          href="/factures"
+          compte={compteFactures}
+          colonnes={[t("tableau.reference"), t("tableau.date"), t("tableau.montantCol")]}
+        >
+          {factures.slice(0, 5).map((item) => {
+            const id = String(item.facture_id ?? "");
+            return (
+              <tr key={id} className="border-t border-border">
+                <td className="px-4 py-3">
+                  <Link href={`/factures/${id}`}>{id}</Link>
+                </td>
+                <td className="px-4 py-3 text-muted">{dateLongue(String(item.date_soin ?? ""))}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{montant(Number(item.montant_total ?? 0), "")}</td>
+              </tr>
+            );
+          })}
+        </Tableau>
+        <Tableau
+          titre={t("tableau.recentesOrd")}
+          href="/ordonnances"
+          compte={compteOrdonnances}
+          colonnes={[t("tableau.reference"), t("tableau.date"), ""]}
+        >
+          {ordonnances.slice(0, 5).map((item) => (
+            <tr key={String(item.ordonnance_id)} className="border-t border-border">
+              <td className="px-4 py-3">{String(item.ordonnance_id ?? "")}</td>
+              <td className="px-4 py-3 text-muted">{dateLongue(String(item.date_prescription ?? ""))}</td>
+              <td />
+            </tr>
+          ))}
+        </Tableau>
+      </div>
+      <aside className="space-y-4">
+        <section className="rounded-2xl border border-border bg-white p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">{t("tableau.monContrat")}</h2>
+            {actif ? (
+              <span className="inline-flex items-center gap-1 text-sm text-risk-low">
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="m8 12 3 3 5-6" />
+                </svg>
+                {t("tableau.actif")}
+              </span>
+            ) : (
+              <span className="text-sm text-muted">{texte(contrat.statut)}</span>
+            )}
+          </div>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">{t("tableau.titulaire")}</dt>
+              <dd className="text-right font-medium">{nom || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">{t("tableau.contrat")}</dt>
+              <dd className="text-right font-medium">{texte(contrat.contrat_id)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted">{t("garanties.formule")}</dt>
+              <dd>
+                {formule === "—" ? (
+                  "—"
+                ) : (
+                  <span className="rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold tracking-wide text-primary">{formule}</span>
+                )}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">{t("garanties.date_effet")}</dt>
+              <dd>{contrat.date_effet ? dateCourte(String(contrat.date_effet)) : "—"}</dd>
+            </div>
+          </dl>
+          <Link className="mt-4 inline-flex text-sm font-medium text-primary" href="/garanties">
+            {t("tableau.voirGaranties")} →
+          </Link>
+        </section>
+        <CarteAssistant formule={formule === "—" ? "" : formule} />
+      </aside>
+    </div>
+  );
+}
+
+function Compteur({
+  href,
+  icone,
+  titre,
+  valeur,
+  lien,
+  note = "",
+}: {
+  href: string;
+  icone: "facture" | "ordonnance" | "remboursement";
+  titre: string;
+  valeur: string;
+  lien: string;
+  note?: string;
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-white p-4">
+      <div className="flex items-center gap-2 text-sm text-muted">
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-soft text-primary">
+          <IconeCompteur nom={icone} />
+        </span>
+        {titre}
+      </div>
+      <p className="mt-3 text-4xl font-semibold tabular-nums">{valeur}</p>
+      {lien ? (
+        <Link className="mt-2 inline-flex text-sm font-medium text-primary" href={href}>
+          {lien} →
+        </Link>
+      ) : (
+        <p className="mt-2 text-sm text-muted">{note}</p>
+      )}
+    </section>
+  );
+}
+
+function IconeCompteur({ nom }: { nom: "facture" | "ordonnance" | "remboursement" }) {
+  if (nom === "ordonnance") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="6" y="3" width="12" height="18" rx="2" />
+        <path d="M9 8h6M9 12h6M9 16h4" />
+      </svg>
+    );
+  }
+  if (nom === "remboursement") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 8v4l3 2" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M14 3v6h6M8 13h8M8 17h5" />
+    </svg>
+  );
+}
+
+function Tableau({
+  titre,
+  href,
+  compte,
+  colonnes,
+  children,
+}: {
+  titre: string;
+  href: string;
+  compte: string;
+  colonnes: string[];
+  children: ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border bg-white">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <h2 className="font-semibold">{titre}</h2>
+        <Link className="text-sm font-medium text-primary" href={href}>
+          {t("tableau.toutVoir")} ({compte}) →
+        </Link>
+      </div>
+      <table className="w-full text-left text-sm">
+        <thead className="text-xs text-muted">
+          <tr>
+            {colonnes.map((colonne) => (
+              <th key={colonne || "vide"} className={`px-4 py-2 font-normal ${colonne === t("tableau.montantCol") ? "text-right" : ""}`}>
+                {colonne}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </section>
+  );
 }
