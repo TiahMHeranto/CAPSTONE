@@ -31,9 +31,13 @@ class Settings(BaseSettings):
     dataset_dir: str = "CohorteAI_datagen/dataset"
     labels_dir: str = "CohorteAI_datagen/labels"
     models_dir: str = "models"
-    ollama_url: str = "http://host.docker.internal:11434"
-    ollama_model: str = "llama3.2"
-    ollama_embed_model: str = "nomic-embed-text"
+    llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    llm_api_key: str = ""
+    llm_model: str = "gemma-4-26b-a4b-it"
+    llm_embed_base_url: str = ""
+    llm_embed_api_key: str = ""
+    llm_embed_model: str = "gemini-embedding-001"
+    llm_embed_dimensions: int = 768
     rag_dir: str = "/corpus"
     rag_index_au_demarrage: bool = True
     assistant_cache_similarite: float = 0.92

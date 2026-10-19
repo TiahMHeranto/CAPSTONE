@@ -1,6 +1,6 @@
 # Fiche du workflow OCR
 
-Le fichier importable est `n8n/workflows/ocr.json`. Il reprend la chaîne « dépôt, lecture, extraction, découpage », avec un webhook à la place d'un dossier Drive. Aucune clef Google, aucun Gemini. Le modèle est Ollama, déjà sur la machine (`llama3.2`).
+Le fichier importable est `n8n/workflows/ocr.json`. Il reprend la chaîne « dépôt, lecture, extraction, découpage », avec un webhook à la place d'un dossier Drive. Le modèle est Gemma 4 (`LLM_MODEL`), appelé avec la clef Google AI Studio.
 
 ## Déclencheur
 
@@ -13,7 +13,7 @@ Le PDF n'est pas conservé. Les exécutions ne sont pas enregistrées.
 1. **Regrouper fichiers** rassemble un ou plusieurs fichiers (nom, type, base64).
 2. **Lire le texte** appelle `POST http://api:8000/invoices/ocr/lire`. pypdf lit le texte intégré. Sinon Tesseract (français et anglais) lit l'image. Les deux sont dans l'image API.
 3. **Preparer le prompt** demande un JSON de factures : identifiants, dates, montant, lignes. Pas de nom, d'adresse, de téléphone, d'e-mail ni de CIN.
-4. **Extraction Ollama** envoie ce texte à `OLLAMA_URL/api/chat`.
+4. **Extraction modele** envoie ce texte à `LLM_BASE_URL/models/{LLM_MODEL}:generateContent`.
 5. **Parser et eclater** découpe le tableau `invoices` en un item par facture.
 6. **Assembler** renvoie `{factures: [...]}` au webhook.
 
@@ -28,4 +28,4 @@ docker compose exec -u node n8n n8n update:workflow --id=S42hzUxzWj7nHPBt --acti
 docker compose restart n8n
 ```
 
-Un PDF sans texte reçoit `422` `PDF_SANS_TEXTE`. Si Ollama ou n8n ne répond pas, `503` `WORKFLOW_INDISPONIBLE`.
+Un PDF sans texte reçoit `422` `PDF_SANS_TEXTE`. Si le modèle ou n8n ne répond pas, `503` `WORKFLOW_INDISPONIBLE`.

@@ -33,10 +33,12 @@ return [{
     moteur: utiles[0].moteur || 'pypdf',
     extraits,
     requete: {
-      model: $env.OLLAMA_MODEL || 'llama3.2',
-      stream: false,
-      format: 'json',
-      messages: [{ role: 'user', content: consigne }]
+      contents: [{ role: 'user', parts: [{ text: consigne }] }],
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: 'application/json',
+        thinkingConfig: { thinkingLevel: 'minimal' }
+      }
     }
   }
 }];

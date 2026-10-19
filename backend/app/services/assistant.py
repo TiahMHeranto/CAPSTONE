@@ -1,9 +1,11 @@
-"""Assistant : recherche dans le corpus, historique de l'assuré, réponse Ollama."""
+"""Assistant : recherche dans le corpus, historique de l'assuré, réponse du modèle."""
 
 import hashlib
 import json
 import logging
+import math
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import psycopg
@@ -68,7 +70,7 @@ def repondre(question: str, principal: Principal) -> tuple[int, dict]:
                 extraits = _chercher(connection, vecteur, principal.role, contrat, formule)
             if "query_database" in outils:
                 historique, requete_sql, echec = interroger(connection, principal, question)
-            texte = generer(question, extraits, historique, fiche)
+            texte, raisonnement = generer(question, extraits, historique, fiche)
             sources = _sources(extraits, historique)
             if not echec:
                 _ecrire_cache(
@@ -81,20 +83,30 @@ def repondre(question: str, principal: Principal) -> tuple[int, dict]:
         logger.warning("assistant erreur=%s", type(exc).__name__)
         return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
     corps = {"reponse": texte, "sources": sources, "cache": False}
+    if raisonnement:
+        corps["raisonnement"] = raisonnement
     if requete_sql:
         corps["requete"] = requete_sql
     return 200, corps
 
 
 def embarquer(texte: str) -> list[float]:
-    corps = _ollama(
-        "/api/embed",
-        {"model": settings.ollama_embed_model, "input": texte},
+    base = settings.llm_embed_base_url or settings.llm_base_url
+    clef = settings.llm_embed_api_key or settings.llm_api_key
+    chemin = "/models/" + urllib.parse.quote(settings.llm_embed_model, safe="") + ":embedContent"
+    corps = _post(
+        base,
+        clef,
+        chemin,
+        {
+            "content": {"parts": [{"text": texte}]},
+            "outputDimensionality": settings.llm_embed_dimensions,
+        },
     )
-    vecteurs = corps.get("embeddings") or []
-    if not vecteurs or len(vecteurs[0]) != 768:
+    vecteur = ((corps.get("embedding") or {}).get("values")) or []
+    if len(vecteur) != settings.llm_embed_dimensions:
         raise ModeleIndisponible("embedding illisible")
-    return [float(valeur) for valeur in vecteurs[0]]
+    return _normer([float(valeur) for valeur in vecteur])
 
 
 def generer(
@@ -102,7 +114,7 @@ def generer(
     extraits: list[dict],
     historique: list[dict] | None,
     fiche: dict | None = None,
-) -> str:
+) -> tuple[str, str]:
     blocs = []
     for extrait in extraits:
         blocs.append(f"[{extrait['source']} p.{extrait['page']}] {extrait['contenu']}")
@@ -117,39 +129,36 @@ def generer(
         + "\n\nQuestion:\n"
         + question
     )
-    corps = _ollama(
-        "/api/chat",
-        {
-            "model": settings.ollama_model,
-            "stream": False,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Tu es l'assistant PrediCare. Reponds en francais, "
-                        "uniquement a partir des extraits, du profil connecte "
-                        "et de l'historique. Pour l'assure du jeton, reponds "
-                        "avec sa formule seulement, sans melanger les plafonds "
-                        "d'une autre formule. Pour les autres roles, si les "
-                        "valeurs different entre ESSENTIEL, CONFORT et PREMIUM, "
-                        "donne chaque formule. Cite le nom du document. "
-                        "Si l'historique liste des factures, recopie "
-                        "l'identifiant, le statut, le montant et la date. "
-                        "Si l'historique est un montant, un total ou un nombre, "
-                        "cite ces chiffres meme sans identifiant. "
-                        "Une regle ou un plafond vient des extraits. "
-                        "Si l'information manque, dis que tu ne la trouves pas. "
-                        "N'invente pas un montant."
-                    ),
-                },
-                {"role": "user", "content": message},
-            ],
-        },
+    corps = _discuter(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "Tu es l'assistant PrediCare. Reponds en francais, "
+                    "uniquement a partir des extraits, du profil connecte "
+                    "et de l'historique. Pour l'assure du jeton, reponds "
+                    "avec sa formule seulement, sans melanger les plafonds "
+                    "d'une autre formule. Pour les autres roles, si les "
+                    "valeurs different entre ESSENTIEL, CONFORT et PREMIUM, "
+                    "donne chaque formule. Cite le nom du document. "
+                    "Si l'historique liste des factures, recopie "
+                    "l'identifiant, le statut, le montant et la date. "
+                    "Si l'historique est un montant, un total ou un nombre, "
+                    "cite ces chiffres meme sans identifiant. "
+                    "Une regle ou un plafond vient des extraits. "
+                    "Si l'information manque, dis que tu ne la trouves pas. "
+                    "N'invente pas un montant. "
+                    "La reponse visible est seulement la phrase finale, en francais."
+                ),
+            },
+            {"role": "user", "content": message},
+        ]
     )
-    contenu = ((corps.get("message") or {}).get("content") or "").strip()
+    message = corps.get("message") or {}
+    contenu = (message.get("content") or "").strip()
     if not contenu:
         raise ModeleIndisponible("reponse vide")
-    return contenu
+    return contenu, (message.get("raisonnement") or "").strip()
 
 
 def _texte_fiche(fiche: dict | None) -> str:
@@ -179,19 +188,112 @@ def _texte_fiche(fiche: dict | None) -> str:
     return "\n".join(lignes)
 
 
-def _ollama(chemin: str, charge: dict) -> dict:
+def _post(base: str, clef: str, chemin: str, charge: dict) -> dict:
+    if not base or not clef:
+        raise ModeleIndisponible("clef absente")
     requete = urllib.request.Request(
-        settings.ollama_url.rstrip("/") + chemin,
+        base.rstrip("/") + chemin,
         data=json.dumps(charge).encode(),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "x-goog-api-key": clef},
         method="POST",
     )
     try:
         with urllib.request.urlopen(requete, timeout=60) as reponse:
             return json.load(reponse)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        logger.warning("ollama erreur=%s", type(exc).__name__)
-        raise ModeleIndisponible("ollama indisponible") from exc
+        logger.warning("modele erreur=%s", type(exc).__name__)
+        raise ModeleIndisponible("modele indisponible") from exc
+
+
+def _discuter(
+    messages: list[dict],
+    outils: list[dict] | None = None,
+    forcer_json: bool = False,
+) -> dict:
+    systeme = [message["content"] for message in messages if message.get("role") == "system"]
+    contenus = []
+    for message in messages:
+        if message.get("role") == "system":
+            continue
+        role = "model" if message.get("role") == "assistant" else "user"
+        contenus.append({"role": role, "parts": [{"text": message.get("content") or ""}]})
+    config: dict = {"temperature": 0, "thinkingConfig": {"thinkingLevel": "minimal"}}
+    if forcer_json:
+        config["responseMimeType"] = "application/json"
+    charge: dict = {"contents": contenus, "generationConfig": config}
+    if systeme:
+        charge["systemInstruction"] = {"parts": [{"text": "\n".join(systeme)}]}
+    if outils:
+        declarations = [_declaration(outil) for outil in outils]
+        charge["tools"] = [{"functionDeclarations": declarations}]
+    nom = urllib.parse.quote(settings.llm_model, safe="")
+    chemin = f"/models/{nom}:generateContent"
+    corps = _post(settings.llm_base_url, settings.llm_api_key, chemin, charge)
+    parts = (((corps.get("candidates") or [{}])[0].get("content") or {}).get("parts")) or []
+    reponse, pensee = _separe(parts)
+    return {
+        "message": {
+            "content": reponse,
+            "tool_calls": _appels(parts),
+            "raisonnement": pensee,
+        }
+    }
+
+
+def _declaration(outil: dict) -> dict:
+    fonction = outil.get("function") or outil
+    return {
+        "name": fonction.get("name"),
+        "description": fonction.get("description") or "",
+        "parameters": _schema(fonction.get("parameters") or {}),
+    }
+
+
+def _schema(valeur: object) -> object:
+    if isinstance(valeur, dict):
+        sortie = {}
+        for cle, item in valeur.items():
+            if cle == "type" and isinstance(item, str):
+                sortie[cle] = item.upper()
+            else:
+                sortie[cle] = _schema(item)
+        return sortie
+    if isinstance(valeur, list):
+        return [_schema(item) for item in valeur]
+    return valeur
+
+
+def _separe(parts: list) -> tuple[str, str]:
+    reponse = []
+    pensee = []
+    for part in parts:
+        texte = (part.get("text") or "").strip()
+        if not texte:
+            continue
+        if part.get("thought"):
+            pensee.append(texte)
+        else:
+            reponse.append(texte)
+    return " ".join(reponse).strip(), "\n".join(pensee).strip()
+
+
+def _appels(parts: list) -> list[dict]:
+    appels = []
+    for part in parts:
+        appel = part.get("functionCall") or {}
+        if not appel.get("name"):
+            continue
+        appels.append(
+            {"function": {"name": appel.get("name"), "arguments": appel.get("args") or {}}}
+        )
+    return appels
+
+
+def _normer(vecteur: list[float]) -> list[float]:
+    norme = math.sqrt(sum(valeur * valeur for valeur in vecteur))
+    if norme == 0:
+        return vecteur
+    return [valeur / norme for valeur in vecteur]
 
 
 def _contrat(connection, assure_id: str | None) -> str | None:
@@ -297,26 +399,21 @@ _OUTILS = (
 
 def choisir_outils(question: str, role: str) -> list[str]:
     outils = _OUTILS if role != "gestionnaire" else _OUTILS[:1]
-    corps = _ollama(
-        "/api/chat",
-        {
-            "model": settings.ollama_model,
-            "stream": False,
-            "tools": outils,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Tu choisis un outil. search_documents pour une garantie "
-                        "ou un plafond. query_database pour une facture, un montant, "
-                        "un statut, une ordonnance ou le profil. Les deux si la "
-                        "question melange les deux. Pour lister des factures, "
-                        "query_database, pas un total."
-                    ),
-                },
-                {"role": "user", "content": question},
-            ],
-        },
+    corps = _discuter(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "Tu choisis un outil. search_documents pour une garantie "
+                    "ou un plafond. query_database pour une facture, un montant, "
+                    "un statut, une ordonnance ou le profil. Les deux si la "
+                    "question melange les deux. Pour lister des factures, "
+                    "query_database, pas un total."
+                ),
+            },
+            {"role": "user", "content": question},
+        ],
+        outils,
     )
     noms = []
     for appel in (corps.get("message") or {}).get("tool_calls") or []:
@@ -360,19 +457,14 @@ def proposer_sql(question: str, erreur: str = "") -> str:
     if erreur:
         message += "\n\nLa requete precedente a ete refusee: " + erreur
     message += "\n\nQuestion:\n" + question
-    corps = _ollama(
-        "/api/chat",
-        {
-            "model": settings.ollama_model,
-            "stream": False,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "Tu ecris uniquement le SQL demande, sans markdown.",
-                },
-                {"role": "user", "content": message},
-            ],
-        },
+    corps = _discuter(
+        [
+            {
+                "role": "system",
+                "content": "Tu ecris uniquement le SQL demande, sans markdown.",
+            },
+            {"role": "user", "content": message},
+        ]
     )
     contenu = ((corps.get("message") or {}).get("content") or "").strip()
     if not contenu:

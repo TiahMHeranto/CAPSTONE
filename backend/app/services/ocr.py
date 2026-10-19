@@ -303,7 +303,7 @@ def _reponse_workflow(recu: dict) -> dict:
         "champs_manquants": premiere["champs_manquants"],
         "facture": premiere["facture"],
         "factures": factures,
-        "moteur": recu.get("moteur") if isinstance(recu.get("moteur"), str) else "ollama",
+        "moteur": recu.get("moteur") if isinstance(recu.get("moteur"), str) else "api",
     }
 
 

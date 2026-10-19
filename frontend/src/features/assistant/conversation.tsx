@@ -7,7 +7,14 @@ import { FormattedText } from "@/features/assistant/texte";
 import { messageErreur, t } from "@/i18n/traduire";
 
 type Source = { source?: string; page?: number | null };
-type Message = { id: string; role: "user" | "assistant"; texte: string; sources: Source[]; sansSource: boolean };
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  texte: string;
+  sources: Source[];
+  sansSource: boolean;
+  raisonnement: string;
+};
 type Onglet = "chat" | "base";
 
 const SUGGESTIONS = ["assistant.s1", "assistant.s2", "assistant.s3", "assistant.s4"];
@@ -77,7 +84,7 @@ export function Conversation({
     const propre = texte.trim().slice(0, 2000);
     if (!propre || enCours) return;
     setQuestion("");
-    setMessages((liste) => [...liste, { id: `u-${liste.length}`, role: "user", texte: propre, sources: [], sansSource: false }]);
+    setMessages((liste) => [...liste, { id: `u-${liste.length}`, role: "user", texte: propre, sources: [], sansSource: false, raisonnement: "" }]);
     setEnCours(true);
     let recu;
     try {
@@ -86,7 +93,7 @@ export function Conversation({
       setEnCours(false);
       setMessages((liste) => [
         ...liste,
-        { id: `a-${liste.length}`, role: "assistant", texte: t("erreur"), sources: [], sansSource: false },
+        { id: `a-${liste.length}`, role: "assistant", texte: t("erreur"), sources: [], sansSource: false, raisonnement: "" },
       ]);
       return;
     }
@@ -94,14 +101,16 @@ export function Conversation({
     if (recu.status === 422) {
       setMessages((liste) => [
         ...liste,
-        { id: `a-${liste.length}`, role: "assistant", texte: t("assistant.hors"), sources: [], sansSource: false },
+        { id: `a-${liste.length}`, role: "assistant", texte: t("assistant.hors"), sources: [], sansSource: false, raisonnement: "" },
       ]);
       return;
     }
     if (recu.status !== 200) {
+      const texte =
+        recu.data.code === "MODELE_INDISPONIBLE" ? t("assistant.indisponible") : messageErreur(recu.data);
       setMessages((liste) => [
         ...liste,
-        { id: `a-${liste.length}`, role: "assistant", texte: messageErreur(recu.data), sources: [], sansSource: false },
+        { id: `a-${liste.length}`, role: "assistant", texte, sources: [], sansSource: false, raisonnement: "" },
       ]);
       return;
     }
@@ -114,6 +123,7 @@ export function Conversation({
         texte: String(recu.data.reponse ?? ""),
         sources,
         sansSource: sources.length === 0,
+        raisonnement: String(recu.data.raisonnement ?? ""),
       },
     ]);
   }
@@ -209,6 +219,12 @@ export function Conversation({
                       </ul>
                     </details>
                   ) : null}
+                  {message.raisonnement ? (
+                    <details className="mt-2 text-xs">
+                      <summary>{t("assistant.raisonnement")}</summary>
+                      <p className="mt-2 whitespace-pre-wrap text-muted">{message.raisonnement}</p>
+                    </details>
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -302,6 +318,12 @@ export function Conversation({
                     </li>
                   ))}
                 </ul>
+              </details>
+            ) : null}
+            {message.raisonnement ? (
+              <details className="mt-2 text-sm">
+                <summary>{t("assistant.raisonnement")}</summary>
+                <p className="mt-2 whitespace-pre-wrap text-muted">{message.raisonnement}</p>
               </details>
             ) : null}
           </article>

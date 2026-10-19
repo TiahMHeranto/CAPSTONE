@@ -108,7 +108,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const files = Array.isArray($json.files) ? $json.files : [];\nconst utiles = files.filter((fichier) => String(fichier.texte || '').trim());\nif (!utiles.length) {\n  return [{ json: { ok: false, code: 'PDF_SANS_TEXTE', stop: true } }];\n}\n\nconst extraits = utiles.map((fichier) => ({\n  index: fichier.index,\n  filename: fichier.filename,\n  texte: String(fichier.texte).slice(0, 20000)\n}));\nconst consigne = [\n  'Tu recois le texte de factures de tiers payant, deja lu par OCR.',\n  'Reponds UNIQUEMENT avec un JSON, sans Markdown.',\n  'Forme attendue : {\"invoices\":[{\"index\":0,\"filename\":\"\",\"facture_id\":null,',\n  '\"type_facture\":null,\"date_soin\":null,\"date_facture\":null,\"montant_total\":null,',\n  '\"devise\":\"MGA\",\"prestataire_id\":null,\"assure_id\":null,\"contrat_id\":null,',\n  '\"ordonnance_id\":null,\"lignes\":[{\"code\":null,\"type_ligne\":\"ACTE\",\"quantite\":1,',\n  '\"prix_unitaire\":null,\"montant\":null}]}]}',\n  'Un objet par facture, dans le meme ordre. Les dates sont YYYY-MM-DD.',\n  'type_ligne vaut ACTE ou MEDICAMENT. Les montants sont des entiers, sans espace.',\n  'Chaque ligne du texte qui contient un code, ACTE ou MEDICAMENT, une quantite et deux montants va dans lignes.',\n  'N invente pas un identifiant absent du texte.',\n  'N extrais ni nom, ni adresse, ni telephone, ni e-mail, ni CIN.',\n  'Textes :',\n  JSON.stringify(extraits)\n].join('\\n');\n\nreturn [{\n  json: {\n    ok: true,\n    stop: false,\n    moteur: utiles[0].moteur || 'pypdf',\n    extraits,\n    requete: {\n      model: $env.OLLAMA_MODEL || 'llama3.2',\n      stream: false,\n      format: 'json',\n      messages: [{ role: 'user', content: consigne }]\n    }\n  }\n}];\n"
+        "jsCode": "const files = Array.isArray($json.files) ? $json.files : [];\nconst utiles = files.filter((fichier) => String(fichier.texte || '').trim());\nif (!utiles.length) {\n  return [{ json: { ok: false, code: 'PDF_SANS_TEXTE', stop: true } }];\n}\n\nconst extraits = utiles.map((fichier) => ({\n  index: fichier.index,\n  filename: fichier.filename,\n  texte: String(fichier.texte).slice(0, 20000)\n}));\nconst consigne = [\n  'Tu recois le texte de factures de tiers payant, deja lu par OCR.',\n  'Reponds UNIQUEMENT avec un JSON, sans Markdown.',\n  'Forme attendue : {\"invoices\":[{\"index\":0,\"filename\":\"\",\"facture_id\":null,',\n  '\"type_facture\":null,\"date_soin\":null,\"date_facture\":null,\"montant_total\":null,',\n  '\"devise\":\"MGA\",\"prestataire_id\":null,\"assure_id\":null,\"contrat_id\":null,',\n  '\"ordonnance_id\":null,\"lignes\":[{\"code\":null,\"type_ligne\":\"ACTE\",\"quantite\":1,',\n  '\"prix_unitaire\":null,\"montant\":null}]}]}',\n  'Un objet par facture, dans le meme ordre. Les dates sont YYYY-MM-DD.',\n  'type_ligne vaut ACTE ou MEDICAMENT. Les montants sont des entiers, sans espace.',\n  'Chaque ligne du texte qui contient un code, ACTE ou MEDICAMENT, une quantite et deux montants va dans lignes.',\n  'N invente pas un identifiant absent du texte.',\n  'N extrais ni nom, ni adresse, ni telephone, ni e-mail, ni CIN.',\n  'Textes :',\n  JSON.stringify(extraits)\n].join('\\n');\n\nreturn [{\n  json: {\n    ok: true,\n    stop: false,\n    moteur: utiles[0].moteur || 'pypdf',\n    extraits,\n    requete: {\n      contents: [{ role: 'user', parts: [{ text: consigne }] }],\n      generationConfig: {\n        temperature: 0,\n        responseMimeType: 'application/json',\n        thinkingConfig: { thinkingLevel: 'minimal' }\n      }\n    }\n  }\n}];\n"
       },
       "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000001200",
       "name": "Preparer le prompt",
@@ -157,10 +157,10 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const url = ($env.OLLAMA_URL || 'http://ollama:11434').replace(/\\/$/, '') + '/api/chat';\ntry {\n  const recu = await this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    body: $json.requete,\n    json: true,\n    timeout: 120000\n  });\n  const raw = recu.message?.content ?? recu.response ?? '';\n  return [{ json: { raw, extraits: $json.extraits || [] } }];\n} catch (error) {\n  return [{ json: { error: 'modele', code: 'MODELE_INDISPONIBLE' } }];\n}\n"
+        "jsCode": "const base = String($env.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\\/$/, '');\nconst clef = String($env.LLM_API_KEY || '');\nconst modele = String($env.LLM_MODEL || 'gemma-4-26b-a4b-it');\nif (!clef) {\n  return [{ json: { error: 'modele', code: 'MODELE_INDISPONIBLE' } }];\n}\nconst url = base + '/models/' + encodeURIComponent(modele) + ':generateContent';\ntry {\n  const recu = await this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    headers: { 'x-goog-api-key': clef },\n    body: $json.requete,\n    json: true,\n    timeout: 120000\n  });\n  const parts = recu.candidates?.[0]?.content?.parts || [];\n  const raw = parts.filter((part) => !part.thought).map((part) => part.text || '').join('');\n  return [{ json: { raw, extraits: $json.extraits || [] } }];\n} catch (error) {\n  return [{ json: { error: 'modele', code: 'MODELE_INDISPONIBLE' } }];\n}\n"
       },
       "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000001680",
-      "name": "Extraction Ollama",
+      "name": "Extraction modele",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -187,7 +187,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const factures = $input.all().map((item) => item.json);\nconst modele = factures.find((facture) => facture.code === 'MODELE_INDISPONIBLE');\nif (modele) {\n  return [{ json: { ok: false, code: 'MODELE_INDISPONIBLE', stop: true, factures: [] } }];\n}\nconst invalide = factures.some((facture) => facture.error);\nif (invalide) {\n  return [{ json: { ok: false, code: 'EXTRACTION_ILLISIBLE', stop: true, factures: [] } }];\n}\nreturn [{ json: { ok: true, moteur: 'ollama', factures } }];\n"
+        "jsCode": "const factures = $input.all().map((item) => item.json);\nconst modele = factures.find((facture) => facture.code === 'MODELE_INDISPONIBLE');\nif (modele) {\n  return [{ json: { ok: false, code: 'MODELE_INDISPONIBLE', stop: true, factures: [] } }];\n}\nconst invalide = factures.some((facture) => facture.error);\nif (invalide) {\n  return [{ json: { ok: false, code: 'EXTRACTION_ILLISIBLE', stop: true, factures: [] } }];\n}\nreturn [{ json: { ok: true, moteur: 'api', factures } }];\n"
       },
       "id": "bbbbbbbb-bbbb-4bbb-8bbb-000000002160",
       "name": "Assembler",
@@ -310,14 +310,14 @@
         ],
         [
           {
-            "node": "Extraction Ollama",
+            "node": "Extraction modele",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extraction Ollama": {
+    "Extraction modele": {
       "main": [
         [
           {
