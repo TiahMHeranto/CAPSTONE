@@ -125,6 +125,7 @@ def test_gestionnaire_sans_lien(monkeypatch) -> None:
 
 def test_assure_rattache_puis_profil_sans_cin(monkeypatch) -> None:
     _brancher(monkeypatch)
+
     def dechiffrer(_fernet, charge: bytes) -> dict:
         if charge == b"principal":
             return {"nom": "Rakoto", "prenoms": "Hery", "numero_cin": "111"}

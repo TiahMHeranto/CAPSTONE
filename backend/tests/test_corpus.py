@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app.services.corpus import destination, etat, lancer
 from app.services import corpus
+from app.services.corpus import destination, etat, lancer
 from app.services.reglages import normaliser
 
 

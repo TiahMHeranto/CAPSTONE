@@ -7,10 +7,10 @@ from app.core.auth import exiger
 from app.core.tokens import Principal
 from app.schemas.flux import AlerteJournalIn, ReglagesIn
 from app.services.alertes import deposer, lister
+from app.services.bi import tableau as tableau_bi
 from app.services.corpus import deposer as deposer_corpus
 from app.services.corpus import etat as etat_corpus
 from app.services.corpus import lancer as lancer_corpus
-from app.services.bi import tableau as tableau_bi
 from app.services.flux import (
     consulter_prediction,
     lire_reglages,

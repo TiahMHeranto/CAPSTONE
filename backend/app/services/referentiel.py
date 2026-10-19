@@ -9,9 +9,7 @@ def lister_catalogue(connection) -> list[dict]:
         ORDER BY libelle
         """
     ).fetchall()
-    return [
-        {"code": row[0], "libelle": row[1], "type_ligne": "ACTE"} for row in actes
-    ] + [
+    return [{"code": row[0], "libelle": row[1], "type_ligne": "ACTE"} for row in actes] + [
         {"code": row[0], "libelle": row[1], "type_ligne": "MEDICAMENT"} for row in medicaments
     ]
 

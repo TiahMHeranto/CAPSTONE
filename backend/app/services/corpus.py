@@ -35,7 +35,8 @@ def chemin_corpus() -> Path:
 def destination(dossier: Path, relatif: str) -> Path | None:
     if not relatif or len(relatif) > 240 or not relatif.lower().endswith(".pdf"):
         return None
-    morceaux = [morceau for morceau in relatif.replace("\\", "/").split("/") if morceau not in ("", ".")]
+    parties = relatif.replace("\\", "/").split("/")
+    morceaux = [morceau for morceau in parties if morceau not in ("", ".")]
     if not morceaux or any(morceau == ".." or "\x00" in morceau for morceau in morceaux):
         return None
     cible = dossier.joinpath(*morceaux)
