@@ -72,6 +72,9 @@
     "deposer": "Déposer la facture",
     "dossier": "Dossier",
     "ouvrir": "Ouvrir",
+    "resultat": "Résultat du dépôt",
+    "pourquoiScore": "Ce qui explique le score",
+    "version": "Modèle",
     "aucune": "Aucune facture pour ce compte."
   },
   "alerte": {

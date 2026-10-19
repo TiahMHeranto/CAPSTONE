@@ -38,7 +38,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       </p>
       {lignes.length ? (
         <section>
-          <h2 className="mb-2 text-xl">{t("alerte.pourquoi")}</h2>
+          <h2 className="mb-2 text-xl">{t("factures.pourquoiScore")}</h2>
           <ShapChart lignes={lignes} />
         </section>
       ) : null}

@@ -17,19 +17,23 @@ def test_fiches_sans_fuite() -> None:
     for fiche in fiches:
         assert not set(fiche.colonnes) & COLONNES_INTERDITES
         assert fiche.seuil_metier < 1
-        assert fiche.artefact_present is False
+        poids = ROOT / "models" / fiche.version / "model.joblib"
+        assert fiche.artefact_present is poids.is_file()
         assert fiche.algorithme == "xgboost"
         assert fiche.colonnes == COLONNES_V2
     assert len(versions["v2"].colonnes) == 23
 
 
-def test_v1_sans_poids_ne_score_pas() -> None:
+def test_sans_fichier_le_score_echoue(tmp_path: Path) -> None:
+    dossier = tmp_path / "v1"
+    dossier.mkdir()
+    (dossier / "metadata.json").write_bytes((ROOT / "models" / "v1" / "metadata.json").read_bytes())
     with pytest.raises(ModeleIndisponible):
         predict(
             "FAC-00000001",
             alert_threshold=1,
             version="v1",
-            models_dir=str(ROOT / "models"),
+            models_dir=str(tmp_path),
             variables={"type_facture": "CONSULTATION"},
         )
 
