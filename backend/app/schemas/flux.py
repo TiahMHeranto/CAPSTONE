@@ -50,6 +50,7 @@ class ReglagesIn(BaseModel):
     n8n_webhook_url: str | None = None
     active_model_version: str | None = None
     drift_psi_threshold: float | None = None
+    rag_corpus_path: str | None = None
 
 
 class AlerteJournalIn(BaseModel):

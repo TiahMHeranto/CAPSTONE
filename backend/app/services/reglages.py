@@ -1,5 +1,7 @@
 import re
+from pathlib import Path
 
+from app.config import settings
 from app.schemas.facture import Rejet
 from app.services.audit import auditer
 
@@ -9,6 +11,7 @@ CLES = (
     "notification_channels",
     "n8n_webhook_url",
     "drift_psi_threshold",
+    "rag_corpus_path",
 )
 CANAUX = frozenset({"slack", "email", "webhook"})
 _VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
@@ -28,6 +31,7 @@ def lire(connection) -> dict[str, str]:
         "notification_channels": trouve.get("notification_channels", ""),
         "n8n_webhook_url": trouve.get("n8n_webhook_url", ""),
         "drift_psi_threshold": trouve.get("drift_psi_threshold", ""),
+        "rag_corpus_path": trouve.get("rag_corpus_path") or settings.rag_dir,
     }
 
 
@@ -39,6 +43,7 @@ def vue(reglages: dict[str, str]) -> dict:
         "notification_channels": canaux,
         "n8n_webhook_url": reglages["n8n_webhook_url"],
         "drift_psi_threshold": _seuil_derive(reglages.get("drift_psi_threshold", "")),
+        "rag_corpus_path": reglages.get("rag_corpus_path") or settings.rag_dir,
     }
 
 
@@ -75,6 +80,12 @@ def normaliser(changements: dict) -> tuple[dict[str, str], list[Rejet]]:
             rejets.append(Rejet(code="REGLAGE_INVALIDE", motif="version de modele illisible"))
         else:
             propres["active_model_version"] = version
+    if "rag_corpus_path" in changements:
+        chemin = changements["rag_corpus_path"]
+        if not isinstance(chemin, str) or not _dossier_valide(chemin):
+            rejets.append(Rejet(code="REGLAGE_INVALIDE", motif="dossier du corpus introuvable"))
+        else:
+            propres["rag_corpus_path"] = str(Path(chemin.strip()))
     inconnus = set(changements) - set(CLES)
     if inconnus:
         rejets.append(Rejet(code="REGLAGE_INVALIDE", motif="cle inconnue"))
@@ -117,6 +128,17 @@ def _seuil_derive(valeur: str) -> float | None:
 def _nombre(valeur: float) -> str:
     texte = f"{round(valeur, 6):.6f}".rstrip("0").rstrip(".")
     return texte or "0"
+
+
+def _dossier_valide(chemin: str) -> bool:
+    propre = chemin.strip()
+    if not propre or len(propre) > 240 or "\x00" in propre:
+        return False
+    morceaux = Path(propre).parts
+    if ".." in morceaux:
+        return False
+    dossier = Path(propre)
+    return dossier.is_absolute() and dossier.is_dir()
 
 
 def _url_valide(url: str) -> bool:

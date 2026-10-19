@@ -1,12 +1,15 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, File, Path, Query, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.core.auth import exiger
 from app.core.tokens import Principal
 from app.schemas.flux import AlerteJournalIn, ReglagesIn
 from app.services.alertes import deposer, lister
+from app.services.corpus import deposer as deposer_corpus
+from app.services.corpus import etat as etat_corpus
+from app.services.corpus import lancer as lancer_corpus
 from app.services.bi import tableau as tableau_bi
 from app.services.flux import (
     consulter_prediction,
@@ -95,6 +98,35 @@ def update_settings(
     principal: Annotated[Principal, Depends(exiger("administrateur"))],
 ) -> JSONResponse:
     status, body = modifier_reglages(principal.identifiant, payload.model_dump(exclude_unset=True))
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.get("/admin/assistant/corpus")
+def read_corpus(
+    _principal: Annotated[Principal, Depends(exiger("administrateur"))],
+) -> JSONResponse:
+    return JSONResponse(status_code=200, content=etat_corpus())
+
+
+@router.post("/admin/assistant/corpus")
+async def upload_corpus(
+    _principal: Annotated[Principal, Depends(exiger("administrateur"))],
+    fichiers: Annotated[list[UploadFile], File()],
+) -> JSONResponse:
+    morceaux: list[tuple[str, bytes]] = []
+    for fichier in fichiers:
+        nom = fichier.filename or ""
+        contenu = await fichier.read()
+        morceaux.append((nom, contenu))
+    status, body = deposer_corpus(morceaux)
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.post("/admin/assistant/reindex")
+def reindex_corpus(
+    _principal: Annotated[Principal, Depends(exiger("administrateur"))],
+) -> JSONResponse:
+    status, body = lancer_corpus()
     return JSONResponse(status_code=status, content=body)
 
 

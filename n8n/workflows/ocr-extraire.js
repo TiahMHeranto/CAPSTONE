@@ -1,4 +1,4 @@
-const url = ($env.OLLAMA_URL || 'http://host.docker.internal:11434').replace(/\/$/, '') + '/api/chat';
+const url = ($env.OLLAMA_URL || 'http://ollama:11434').replace(/\/$/, '') + '/api/chat';
 try {
   const recu = await this.helpers.httpRequest({
     method: 'POST',

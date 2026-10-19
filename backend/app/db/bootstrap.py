@@ -223,6 +223,14 @@ def ensure_alert_threshold() -> None:
             """,
             (str(settings.drift_psi_threshold),),
         )
+        connection.execute(
+            """
+            INSERT INTO app.settings (key, value)
+            VALUES ('rag_corpus_path', %s)
+            ON CONFLICT (key) DO NOTHING
+            """,
+            (settings.rag_dir,),
+        )
         connection.commit()
 
 
