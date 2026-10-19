@@ -3,6 +3,9 @@ import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { Coquille } from "@/components/coquille";
 import { COOKIE_THEME } from "@/lib/cookies";
+import { nomAffiche } from "@/lib/nom";
+import { bureau } from "@/lib/rbac";
+import { appel } from "@/lib/api/serveur";
 import { lireSession } from "@/lib/session";
 import "./globals.css";
 
@@ -15,11 +18,20 @@ export const dynamic = "force-dynamic";
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const session = await lireSession();
   const theme = (await cookies()).get(COOKIE_THEME)?.value === "dark" ? "dark" : "light";
+  let nom = "";
+  if (session && !bureau(session.role)) {
+    try {
+      const profil = await appel("/me/profil");
+      if (profil.status === 200) nom = nomAffiche(profil.data);
+    } catch {
+      nom = "";
+    }
+  }
   return (
     <html lang="fr" data-theme={theme} className={`${plex.variable} ${mono.variable}`}>
       <body>
         {session ? (
-          <Coquille session={session} theme={theme}>
+          <Coquille session={session} theme={theme} nom={nom}>
             {children}
           </Coquille>
         ) : (

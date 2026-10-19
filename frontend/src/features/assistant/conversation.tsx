@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Champ } from "@/components/ui";
 import { demander } from "@/features/assistant/api";
 import { FormattedText } from "@/features/assistant/texte";
@@ -47,16 +47,31 @@ function IconePersonne() {
   );
 }
 
-export function Conversation({ compact = false, depart = "chat" }: { compact?: boolean; depart?: Onglet }) {
+export function Conversation({
+  compact = false,
+  depart = "chat",
+  demande = null,
+}: {
+  compact?: boolean;
+  depart?: Onglet;
+  demande?: { id: number; texte: string } | null;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [enCours, setEnCours] = useState(false);
   const [conseiller, setConseiller] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>(depart);
+  const derniereDemande = useRef(0);
 
   useEffect(() => {
     if (compact) setOnglet(depart);
   }, [compact, depart]);
+
+  useEffect(() => {
+    if (!demande || demande.id === derniereDemande.current) return;
+    derniereDemande.current = demande.id;
+    void envoyer(demande.texte);
+  }, [demande]);
 
   async function envoyer(texte: string) {
     const propre = texte.trim().slice(0, 2000);

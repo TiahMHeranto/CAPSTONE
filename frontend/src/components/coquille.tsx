@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AssistantFlottant } from "@/components/assistant-flottant";
+import { EntetePersonnel } from "@/components/entete-personnel";
 import { Pouls } from "@/components/domain/pouls";
 import { ThemeButton } from "@/components/theme-button";
 import { t } from "@/i18n/traduire";
@@ -7,11 +8,21 @@ import { bureau, LIENS } from "@/lib/rbac";
 import { quitter } from "@/features/auth/api";
 import type { Session } from "@/lib/session";
 
-export function Coquille({ session, theme, children }: { session: Session; theme: string; children: React.ReactNode }) {
+export function Coquille({
+  session,
+  theme,
+  nom = "",
+  children,
+}: {
+  session: Session;
+  theme: string;
+  nom?: string;
+  children: React.ReactNode;
+}) {
   const liens = LIENS.filter((lien) => lien.href !== "/assistant" && lien.roles.includes(session.role));
   const sombre = bureau(session.role);
   return (
-    <div className={sombre ? "bureau min-h-dvh bg-background md:grid md:grid-cols-[240px_1fr]" : "min-h-dvh bg-background"}>
+    <div className={sombre ? "bureau min-h-dvh bg-background md:grid md:grid-cols-[240px_1fr]" : "flex min-h-dvh flex-col bg-background"}>
       <a className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:bg-surface focus:p-2" href="#contenu">
         {t("passer")}
       </a>
@@ -32,33 +43,23 @@ export function Coquille({ session, theme, children }: { session: Session; theme
           </ul>
         </nav>
       ) : (
-        <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
-          <Link className="flex items-center gap-2 font-semibold" href="/tableau">
-            <Pouls className="h-6 w-12 text-primary" />
-            {t("marque")}
-          </Link>
-          <nav className="flex flex-wrap gap-2" aria-label={t("marque")}>
-            {liens.map((lien) => (
-              <Link key={lien.href} className="rounded-md px-2 py-2 text-sm" href={lien.href}>
-                {t(lien.cle)}
-              </Link>
-            ))}
-          </nav>
-        </header>
+        <EntetePersonnel liens={liens} session={session} nom={nom} />
       )}
-      <div className="flex min-h-dvh flex-col">
-        <div className="flex items-center justify-end gap-3 px-4 py-3 text-sm text-muted">
-          <span>
-            {session.identifiant} · {t(`roles.${session.role}`)}
-          </span>
-          {sombre ? <ThemeButton sombre={theme === "dark"} /> : null}
-          <form action={quitter}>
-            <button className="min-h-11 px-2" type="submit">
-              {t("quitter")}
-            </button>
-          </form>
-        </div>
-        <main id="contenu" className="mx-auto w-full max-w-5xl flex-1 space-y-4 px-4 pb-10">
+      <div className={sombre ? "flex min-h-dvh flex-col" : "flex min-h-0 flex-1 flex-col"}>
+        {sombre ? (
+          <div className="flex items-center justify-end gap-3 px-4 py-3 text-sm text-muted">
+            <span>
+              {session.identifiant} · {t(`roles.${session.role}`)}
+            </span>
+            <ThemeButton sombre={theme === "dark"} />
+            <form action={quitter}>
+              <button className="min-h-11 px-2" type="submit">
+                {t("quitter")}
+              </button>
+            </form>
+          </div>
+        ) : null}
+        <main id="contenu" className={sombre ? "mx-auto w-full max-w-5xl flex-1 space-y-4 px-4 pb-10" : "mx-auto w-full max-w-6xl flex-1 space-y-4 px-6 pb-16"}>
           {children}
         </main>
         <footer className="px-4 py-4 text-sm text-muted">
