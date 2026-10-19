@@ -9,7 +9,7 @@ RUN apt-get update \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/app ./app
+COPY backend/app /app/app
 COPY migrations ./migrations
 COPY alembic.ini .
 COPY models ./models
