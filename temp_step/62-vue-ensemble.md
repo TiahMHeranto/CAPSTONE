@@ -26,4 +26,4 @@ Connexion `assure`, ouverture de `/tableau`. Le compte de démonstration n'est p
 
 ## Ensuite
 
-Rien.
+Le bandeau et la fiche des autres rôles sont repris dans `63-tableau-bandeau.md`.
