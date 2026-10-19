@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AssistantFlottant } from "@/components/assistant-flottant";
 import { Pouls } from "@/components/domain/pouls";
 import { ThemeButton } from "@/components/theme-button";
 import { t } from "@/i18n/traduire";
@@ -7,7 +8,7 @@ import { quitter } from "@/features/auth/api";
 import type { Session } from "@/lib/session";
 
 export function Coquille({ session, theme, children }: { session: Session; theme: string; children: React.ReactNode }) {
-  const liens = LIENS.filter((lien) => lien.roles.includes(session.role));
+  const liens = LIENS.filter((lien) => lien.href !== "/assistant" && lien.roles.includes(session.role));
   const sombre = bureau(session.role);
   return (
     <div className={sombre ? "bureau min-h-dvh bg-background md:grid md:grid-cols-[240px_1fr]" : "min-h-dvh bg-background"}>
@@ -63,6 +64,7 @@ export function Coquille({ session, theme, children }: { session: Session; theme
         <footer className="px-4 py-4 text-sm text-muted">
           <Link href="/accessibilite">{t("nav.accessibilite")}</Link>
         </footer>
+        <AssistantFlottant />
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ type Message = { id: string; role: "user" | "assistant"; texte: string; sources:
 
 const SUGGESTIONS = ["assistant.s1", "assistant.s2", "assistant.s3", "assistant.s4"];
 
-export function Conversation() {
+export function Conversation({ compact = false }: { compact?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [enCours, setEnCours] = useState(false);
@@ -53,11 +53,17 @@ export function Conversation() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] flex-col">
+    <div className={compact ? "flex h-full min-h-0 flex-col" : "flex h-[calc(100dvh-8rem)] flex-col"}>
       <header className="flex items-center justify-between gap-3 border-b border-border py-3">
-        <h1 className="text-xl font-semibold">
+        {compact ? (
+          <h2 className="text-xl font-semibold">
           {t("assistant.titre")} <span className="rounded-md bg-primary-soft px-2 py-1 text-sm text-primary">{t("assistant.badge")}</span>
-        </h1>
+        </h2>
+        ) : (
+          <h1 className="text-xl font-semibold">
+            {t("assistant.titre")} <span className="rounded-md bg-primary-soft px-2 py-1 text-sm text-primary">{t("assistant.badge")}</span>
+          </h1>
+        )}
         <Button variante="secondary" type="button" onClick={() => setConseiller(true)}>
           {t("assistant.conseiller")}
         </Button>

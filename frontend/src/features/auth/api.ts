@@ -20,12 +20,13 @@ export async function connecter(formData: FormData): Promise<{ erreur: string } 
     return { erreur: data.code === "TROP_DE_REQUETES" ? "attente" : "echec" };
   }
   const jar = await cookies();
+  const rester = formData.get("rester") === "on";
   jar.set(COOKIE_SESSION, data.token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 8 * 3600,
+    ...(rester ? { maxAge: 8 * 3600 } : {}),
   });
   jar.set(COOKIE_ACTIVITE, String(Date.now()), { httpOnly: true, sameSite: "lax", path: "/" });
   redirect(accueil(data.role));
