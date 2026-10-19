@@ -82,5 +82,5 @@ def _lire(meta_path: Path) -> FicheModele:
         colonnes=colonnes,
         metriques=meta.get("resultats_test") or meta.get("resultats") or {},
         metadata_sha256=hashlib.sha256(brut).hexdigest(),
-        artefact_present=(meta_path.parent / "model.joblib").is_file(),
+        artefact_present=chemin_artefact(meta_path.parent) is not None,
     )

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.core.tokens import emettre, hacher, lire_jeton, verifier
+from app.privacy.crypto import pseudonyme
 from app.schemas.prediction import Contribution, Prediction
 from app.services import flux, metrics, notify, reglages
 from app.services.inference import predict as predict_reel
@@ -313,6 +314,20 @@ def test_facture_invalide_audit_sans_score(client, monkeypatch, entete) -> None:
     assert response.json()["rejets"][0]["code"] == "MONTANT_NEGATIF"
     assert memoire.predictions == []
     assert memoire.audit[0][1] == "rejet_facture"
+
+
+def test_assure_imprime_devient_pseudonyme(client, monkeypatch, entete) -> None:
+    memoire = _brancher(monkeypatch)
+    brut = "ASS-IMPRIME"
+    attendu = pseudonyme(brut, settings.pseudo_hmac_key)
+    memoire.assures.add(attendu)
+    response = client.post(
+        "/invoices",
+        json=_facture("FAC-PSEUDO", assure_id=brut),
+        headers=entete(),
+    )
+    assert response.status_code == 200
+    assert memoire.factures["FAC-PSEUDO"]["assure_id"] == attendu
 
 
 def test_reference_inconnue(client, monkeypatch, entete) -> None:

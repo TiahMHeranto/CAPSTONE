@@ -57,6 +57,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       LOG_LEVEL: ${LOG_LEVEL}
+      PSEUDO_HMAC_KEY: ${PSEUDO_HMAC_KEY:-change-me-pseudo}
       MODELS_DIR: /app/models
       PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-change-me-pii}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
@@ -118,6 +119,20 @@ services:
       timeout: 5s
       retries: 12
       start_period: 90s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "0.0.0.0:${FRONTEND_PORT:-3000}:3000"
+    environment:
+      API_URL: http://api:8000
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   n8n:

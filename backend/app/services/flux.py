@@ -7,6 +7,7 @@ from app.cleaning.validate import valider_facture
 from app.config import settings
 from app.core.tokens import Principal
 from app.db.session import ouvrir
+from app.privacy.crypto import pseudonyme
 from app.schemas.facture import FactureIn, Rejet
 from app.services.audit import auditer
 from app.services.features import construire_variables
@@ -59,6 +60,7 @@ def recevoir_lot(factures: list[FactureIn], acteur: str) -> tuple[int, dict]:
 
 
 def soumettre(connection, facture: FactureIn, acteur: str) -> tuple[int, dict, dict | None]:
+    facture = _resoudre_assure(connection, facture)
     rejets = valider_facture(facture, *lire_codes(connection))
     rejets.extend(_references(connection, facture))
     if rejets:
@@ -393,6 +395,29 @@ def _rejet(facture_id: str, rejets: list[Rejet]) -> tuple[int, dict, None]:
         },
         None,
     )
+
+
+def _resoudre_assure(connection, facture: FactureIn) -> FactureIn:
+    brut = _option(facture.assure_id)
+    if not brut or _assure_connu(connection, brut):
+        return facture
+    derive = pseudonyme(brut, settings.pseudo_hmac_key)
+    if derive != brut and _assure_connu(connection, derive):
+        return facture.model_copy(update={"assure_id": derive})
+    return facture
+
+
+def _assure_connu(connection, identifiant: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT 1 FROM clean.assures WHERE assure_id = %s
+        UNION ALL
+        SELECT 1 FROM app.assures WHERE assure_id = %s
+        LIMIT 1
+        """,
+        (identifiant, identifiant),
+    ).fetchone()
+    return row is not None
 
 
 def _references(connection, facture: FactureIn) -> list[Rejet]:

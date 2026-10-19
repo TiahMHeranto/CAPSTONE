@@ -88,7 +88,7 @@ Le corps d'un rejet métier est `422` avec `rejets: [{code, motif}]`, ou un obje
 | `TYPE_INVALIDE` | type ou format refusé par le schéma |
 | `MONTANT_NEGATIF`, `MONTANT_LIGNES`, `DEVISE_INVALIDE` | montant ou devise |
 | `DATES_INCOHERENTES`, `LIGNES_ABSENTES`, `TYPE_LIGNE`, `CODE_INCONNU` | contenu de la facture |
-| `REFERENCE_INCONNUE` | prestataire, assuré ou contrat absent |
+| `REFERENCE_INCONNUE` | prestataire, assuré ou contrat absent. L'identifiant imprimé sur une facture est traduit en pseudonyme avant ce contrôle ; seul l'assuré absent des deux formes est rejeté |
 | `CHAMP_OBLIGATOIRE` | champ vide |
 | `DOUBLON` | `facture_id` déjà déposé |
 | `NON_AUTORISE` | jeton absent ou invalide |

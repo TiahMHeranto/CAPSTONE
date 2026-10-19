@@ -23,12 +23,12 @@ def test_fiches_sans_fuite() -> None:
     assert len(versions["v2"].colonnes) == 23
 
 
-def test_v2_sans_poids_ne_score_pas() -> None:
+def test_v1_sans_poids_ne_score_pas() -> None:
     with pytest.raises(ModeleIndisponible):
         predict(
             "FAC-00000001",
             alert_threshold=1,
-            version="v2",
+            version="v1",
             models_dir=str(ROOT / "models"),
             variables={"type_facture": "CONSULTATION"},
         )
