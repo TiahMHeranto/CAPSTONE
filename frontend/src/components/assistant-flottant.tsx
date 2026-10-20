@@ -1,23 +1,9 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Conversation } from "@/features/assistant/conversation";
+import { Salon } from "@/features/assistant/salon";
 import { t } from "@/i18n/traduire";
-
-type Onglet = "chat" | "base";
-
-const clair: CSSProperties = {
-  ["--foreground" as string]: "#0e1a2b",
-  ["--muted-foreground" as string]: "#526074",
-  ["--border" as string]: "#e6ebf2",
-  ["--surface" as string]: "#ffffff",
-  ["--primary" as string]: "#1fbf75",
-  ["--primary-hover" as string]: "#17a866",
-  ["--primary-soft" as string]: "#e8f8f0",
-  ["--primary-foreground" as string]: "#ffffff",
-  color: "#0e1a2b",
-};
 
 function IconeBulle({ className = "h-6 w-6" }: { className?: string }) {
   return (
@@ -38,13 +24,17 @@ function IconeFermer() {
 export function AssistantFlottant() {
   const chemin = usePathname();
   const [ouvert, setOuvert] = useState(false);
-  const [depart, setDepart] = useState<Onglet>("chat");
+  const [monte, setMonte] = useState(false);
+  const [clavier, setClavier] = useState(0);
   const [demande, setDemande] = useState<{ id: number; texte: string } | null>(null);
+
+  useEffect(() => {
+    if (ouvert) setMonte(true);
+  }, [ouvert]);
 
   useEffect(() => {
     function recevoir(event: Event) {
       const question = (event as CustomEvent<{ question?: string }>).detail?.question;
-      setDepart("chat");
       setOuvert(true);
       if (question) setDemande({ id: Date.now(), texte: question });
     }
@@ -61,18 +51,42 @@ export function AssistantFlottant() {
     return () => window.removeEventListener("keydown", fermer);
   }, [ouvert]);
 
+  useEffect(() => {
+    if (!ouvert) return;
+    const vue = window.visualViewport;
+    if (!vue) return;
+    function mesurer() {
+      if (!vue) return;
+      setClavier(Math.max(0, window.innerHeight - vue.height - vue.offsetTop));
+    }
+    vue.addEventListener("resize", mesurer);
+    vue.addEventListener("scroll", mesurer);
+    mesurer();
+    return () => {
+      vue.removeEventListener("resize", mesurer);
+      vue.removeEventListener("scroll", mesurer);
+      setClavier(0);
+    };
+  }, [ouvert]);
+
   if (chemin === "/assistant") return null;
 
   return (
-    <div className={`fixed bottom-5 right-5 z-40 flex items-end gap-3 ${ouvert ? "flex-col" : ""}`} style={clair}>
-      {ouvert ? (
+    <div
+      className={`fixed right-5 z-40 flex items-end ${ouvert ? "flex-col gap-3" : ""}`}
+      style={{ bottom: `max(1.25rem, calc(env(safe-area-inset-bottom) + ${clavier}px))` }}
+    >
+      {monte ? (
         <section
           role="dialog"
-          aria-modal="true"
+          aria-modal={ouvert}
+          aria-hidden={!ouvert}
           aria-label={t("assistant.titre")}
-          className="flex h-[min(34rem,calc(100dvh-6.5rem))] w-[min(22.5rem,calc(100vw-2rem))] shrink-0 flex-col overflow-hidden rounded-3xl bg-white shadow-xl"
+          className={`${ouvert ? "flex" : "hidden"} h-[min(36rem,calc(100dvh-6.5rem))] w-[min(24rem,calc(100vw-2rem))] shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-xl`}
         >
-          <Conversation compact depart={depart} demande={demande} />
+          <Suspense fallback={null}>
+            <Salon variant="widget" visible={ouvert} questionDemandee={demande} />
+          </Suspense>
         </section>
       ) : null}
       <button

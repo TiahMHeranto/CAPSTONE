@@ -90,9 +90,18 @@ function bip() {
   osc.onended = () => void contexte.close();
 }
 
-export function Salon() {
+export function Salon({
+  variant = "page",
+  visible = true,
+  questionDemandee = null,
+}: {
+  variant?: "page" | "widget";
+  visible?: boolean;
+  questionDemandee?: { id: number; texte: string } | null;
+}) {
   const router = useRouter();
   const params = useSearchParams();
+  const widget = variant === "widget";
   const [pret, setPret] = useState(false);
   const [fils, setFils] = useState<Fil[]>([]);
   const [actif, setActif] = useState("");
@@ -118,6 +127,8 @@ export function Salon() {
   const [avisTexte, setAvisTexte] = useState("");
   const [fichiers, setFichiers] = useState<Piece[]>([]);
   const [depot, setDepot] = useState(false);
+  const [conseiller, setConseiller] = useState(false);
+  const derniereDemande = useRef(0);
   const [clavier, setClavier] = useState(0);
   const zone = useRef<HTMLDivElement>(null);
   const saisie = useRef<HTMLTextAreaElement>(null);
@@ -157,10 +168,10 @@ export function Salon() {
     setQuestion(lireBrouillon(choisi.id));
     setSon(lireSon());
     setLigne(navigator.onLine);
-    if (params.get("c") !== choisi.id) router.replace(`/assistant?c=${choisi.id}`);
+    if (!widget && params.get("c") !== choisi.id) router.replace(`/assistant?c=${choisi.id}`);
     setPret(true);
-    saisie.current?.focus();
-  }, [params, router]);
+    if (visible) saisie.current?.focus();
+  }, [params, router, widget, visible]);
 
   useEffect(() => {
     if (pret) ecrireFils(fils);
@@ -246,7 +257,7 @@ export function Salon() {
     premier.current = true;
     setLoin(false);
     setNouveaux(0);
-    router.replace(`/assistant?c=${id}`);
+    if (!widget) router.replace(`/assistant?c=${id}`);
     saisie.current?.focus();
   }
 
@@ -453,6 +464,7 @@ export function Salon() {
 
   useEffect(() => {
     function touche(event: KeyboardEvent) {
+      if (widget && !visible) return;
       const cible = event.target instanceof HTMLElement ? event.target : null;
       const champ = cible?.tagName === "INPUT" || cible?.tagName === "TEXTAREA";
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "o") {
@@ -460,8 +472,11 @@ export function Salon() {
         creer();
       } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setMenu(true);
-        rechercheRef.current?.focus();
+        if (widget) saisie.current?.focus();
+        else {
+          setMenu(true);
+          rechercheRef.current?.focus();
+        }
       } else if (event.key === "?" && !champ && !event.ctrlKey && !event.metaKey) {
         setAide(true);
       } else if (event.key === "Escape") {
@@ -475,6 +490,16 @@ export function Salon() {
     window.addEventListener("keydown", touche);
     return () => window.removeEventListener("keydown", touche);
   });
+
+  useEffect(() => {
+    if (visible && pret) saisie.current?.focus();
+  }, [visible, pret]);
+
+  useEffect(() => {
+    if (!questionDemandee || !pret || !actif || questionDemandee.id === derniereDemande.current) return;
+    derniereDemande.current = questionDemandee.id;
+    void envoyer(questionDemandee.texte);
+  }, [questionDemandee, pret, actif]);
 
   const messages = fil ? fil.messages.slice(debut || (fil.messages.length > 200 ? fil.messages.length - 200 : 0)) : [];
   const commandes = ["/help", "/reset"].filter((commande) => question.startsWith("/") && commande.startsWith(question.trim()));
@@ -491,11 +516,15 @@ export function Salon() {
 
   return (
     <div
-      className="flex min-h-[100dvh] flex-1 flex-col bg-background max-md:fixed max-md:inset-0 max-md:z-30 md:absolute md:inset-0 md:z-10 md:min-h-0 md:flex-row md:overflow-hidden"
-      style={{ paddingBottom: clavier ? `${clavier}px` : undefined }}
+      className={
+        widget
+          ? "flex h-full min-h-0 flex-col bg-surface text-foreground"
+          : "flex min-h-[100dvh] flex-1 flex-col bg-background max-md:fixed max-md:inset-0 max-md:z-30 md:absolute md:inset-0 md:z-10 md:min-h-0 md:flex-row md:overflow-hidden"
+      }
+      style={!widget && clavier ? { paddingBottom: `${clavier}px` } : undefined}
     >
       {menu ? <button type="button" className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-label={t("assistant.fermerMenu")} onClick={() => setMenu(false)} /> : null}
-      <aside className={`${menu ? "fixed inset-y-0 left-0 z-40 flex w-72" : "hidden"} min-h-0 shrink-0 flex-col border-r border-border bg-surface md:static md:flex md:w-64`}>
+      <aside className={widget ? "hidden" : `${menu ? "fixed inset-y-0 left-0 z-40 flex w-72" : "hidden"} min-h-0 shrink-0 flex-col border-r border-border bg-surface md:static md:flex md:w-64`}>
         <div className="flex items-center gap-2 p-3">
           <button type="button" className="min-h-11 flex-1 rounded-xl bg-foreground px-3 text-sm text-background" onClick={creer}>
             {t("assistant.nouveau")}
@@ -568,6 +597,17 @@ export function Salon() {
       </aside>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
+          {widget ? (
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1">
+                <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">{manquant ? t("assistant.introuvableFil") : fil?.titre}</h1>
+                <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-lg" aria-label={t("assistant.nouveau")} onClick={creer}>+</button>
+                <Link className="inline-flex min-h-11 shrink-0 items-center px-2 text-sm text-muted" href="/assistant">{t("assistant.page")}</Link>
+              </div>
+              <p className="text-xs text-muted">{enCours ? t("assistant.ecrit") : t("assistant.statut")}</p>
+            </div>
+          ) : (
+          <div className="contents">
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border md:hidden" aria-label={t("assistant.menu")} onClick={() => setMenu(true)}>
@@ -588,6 +628,8 @@ export function Salon() {
             <button type="button" className="min-h-11 px-2 text-sm" aria-pressed={son} onClick={() => { setSon((valeur) => { ecrireSon(!valeur); return !valeur; }); }}>{t("assistant.son")}</button>
             <button type="button" className="grid h-11 w-11 place-items-center" aria-label={t("assistant.aide")} onClick={() => setAide(true)}>?</button>
           </div>
+          </div>
+          )}
         </header>
         {!ligne ? <p className="bg-risk-medium-bg px-4 py-2 text-sm text-risk-medium">{t("assistant.horsLigne")}</p> : null}
         <div className="sr-only" aria-live="polite">{fil?.messages.at(-1)?.role === "assistant" ? fil.messages.at(-1)?.texte : ""}</div>
@@ -817,11 +859,20 @@ export function Salon() {
             </div>
             <div className="mt-1 flex items-center justify-between gap-3 px-1">
               <p className="text-xs text-muted">{t("assistant.avertissement")}</p>
+              {widget ? (
+                <button type="button" className="min-h-11 shrink-0 px-1 text-xs text-muted" onClick={() => setConseiller(true)}>{t("assistant.conseiller")}</button>
+              ) : null}
               {question.length >= 1600 ? <p className="text-xs text-muted">{question.length} / {LIMITE}</p> : null}
             </div>
           </div>
         </form>
       </section>
+      {conseiller ? (
+        <dialog open className="z-50 m-auto w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 text-foreground">
+          <p>{t("assistant.conseillerTexte")}</p>
+          <button type="button" className="mt-3 min-h-11 rounded-xl border border-border px-4" onClick={() => setConseiller(false)}>{t("annuler")}</button>
+        </dialog>
+      ) : null}
       {aide ? (
         <dialog open className="fixed inset-0 z-50 m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 text-foreground" onCancel={() => setAide(false)}>
           <h2 className="text-lg font-semibold">{t("assistant.aide")}</h2>
