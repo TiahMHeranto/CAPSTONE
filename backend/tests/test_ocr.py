@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.config import settings
-from app.services.ocr import analyser_texte
+from app.services.ocr import analyser_ordonnance, analyser_texte
 
 RACINE = Path(__file__).resolve().parents[2]
 TEXTE = """Identifiant: FAC-OCR-1
@@ -61,6 +61,27 @@ def test_analyse_une_facture_etiquetee() -> None:
     assert facture["montant_total"] == 15000
     assert facture["lignes"][0]["quantite"] == 2
     assert facture["lignes"][0]["type_ligne"] == "ACTE"
+
+
+def test_analyse_une_ordonnance() -> None:
+    recu = analyser_ordonnance(
+        "\n".join(
+            [
+                "Ordonnance: ORD-12",
+                "Date de prescription: 2026-10-01",
+                "Validite: 10",
+                "Assure: ASR-1",
+                "ACC-CESAR | ACTE | 2 | 7500 | 15000",
+            ]
+        )
+    )
+    ordonnance = recu["ordonnance"]
+    assert recu["complet"] is True
+    assert ordonnance["ordonnance_id"] == "ORD-12"
+    assert ordonnance["date_prescription"] == "2026-10-01"
+    assert ordonnance["validite_jours"] == 10
+    assert ordonnance["assure_id"] == "ASR-1"
+    assert ordonnance["lignes"][0]["quantite"] == 2
 
 
 def test_analyse_signale_les_champs_absents() -> None:

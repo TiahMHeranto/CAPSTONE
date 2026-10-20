@@ -6,11 +6,21 @@ import { RiskBadge } from "@/components/domain/risk-badge";
 import { ScoreRing } from "@/components/domain/score-ring";
 import { ShapChart, type Explication } from "@/components/domain/shap-chart";
 import { Button, Champ, Etiquette } from "@/components/ui";
-import { envoyerFacture, lirePdf } from "@/features/invoices/api";
+import { confirmerOrdonnance, envoyerFacture, lireOrdonnance, lirePdf } from "@/features/invoices/api";
+import { Depot } from "@/features/invoices/depot";
 import { factureSchema, type FactureSaisie } from "@/features/invoices/schemas/facture";
 import { messageErreur, t } from "@/i18n/traduire";
 
 type Ligne = FactureSaisie["lignes"][number];
+type LigneOrdonnance = { code: string; quantite: number };
+
+type OrdonnanceSaisie = {
+  ordonnance_id: string;
+  assure_id: string;
+  date_prescription: string;
+  validite_jours: number;
+  lignes: LigneOrdonnance[];
+};
 
 function aujourdHui() {
   return new Date().toISOString().slice(0, 10);
@@ -41,8 +51,26 @@ type ResultatScore = {
   explications: Explication[];
 };
 
-export function FormulaireFacture({ peutDeposer }: { peutDeposer: boolean }) {
+function ordonnanceVide(): OrdonnanceSaisie {
+  return {
+    ordonnance_id: "",
+    assure_id: "",
+    date_prescription: aujourdHui(),
+    validite_jours: 30,
+    lignes: [{ code: "", quantite: 1 }],
+  };
+}
+
+export function FormulaireFacture({
+  peutDeposer,
+  peutCreerOrdonnance,
+}: {
+  peutDeposer: boolean;
+  peutCreerOrdonnance: boolean;
+}) {
   const [facture, setFacture] = useState<FactureSaisie>(vide);
+  const [ordonnance, setOrdonnance] = useState<OrdonnanceSaisie>(ordonnanceVide);
+  const [ordonnanceOuverte, setOrdonnanceOuverte] = useState(false);
   const [message, setMessage] = useState("");
   const [resultat, setResultat] = useState<ResultatScore | null>(null);
   const [enCours, setEnCours] = useState(false);
@@ -89,45 +117,179 @@ export function FormulaireFacture({ peutDeposer }: { peutDeposer: boolean }) {
     setMessage(recu.status === 200 ? t("factures.valider") : messageErreur(recu.data));
   }
 
+  function pdf(fichier: File) {
+    return fichier.type === "application/pdf" || fichier.name.toLowerCase().endsWith(".pdf");
+  }
+
+  async function chargerFacture(fichier: File) {
+    if (!pdf(fichier)) {
+      setMessage(t("factures.pdfSeul"));
+      return;
+    }
+    setEnCours(true);
+    setMessage(t("factures.lecture"));
+    const recu = await lirePdf(fichier);
+    setEnCours(false);
+    if (recu.status !== 200) {
+      setMessage(messageErreur(recu.data));
+      return;
+    }
+    const lue = (recu.data.facture ?? {}) as Record<string, unknown>;
+    setFacture((actuel) => ({
+      ...actuel,
+      facture_id: texte(lue.facture_id, actuel.facture_id),
+      type_facture: texte(lue.type_facture, actuel.type_facture),
+      date_soin: texte(lue.date_soin, actuel.date_soin),
+      date_facture: texte(lue.date_facture, actuel.date_facture),
+      assure_id: texte(lue.assure_id, actuel.assure_id ?? ""),
+      ordonnance_id: texte(lue.ordonnance_id, actuel.ordonnance_id ?? ""),
+      contrat_id: texte(lue.contrat_id, actuel.contrat_id ?? ""),
+      prestataire_id: texte(lue.prestataire_id, actuel.prestataire_id ?? ""),
+      montant_total: typeof lue.montant_total === "number" ? lue.montant_total : actuel.montant_total,
+      canal_reception: "pdf",
+      lignes: Array.isArray(lue.lignes) && lue.lignes.length ? (lue.lignes as Ligne[]) : actuel.lignes,
+    }));
+    setMessage(t("factures.pdfAide"));
+  }
+
+  async function chargerOrdonnance(fichier: File) {
+    if (!pdf(fichier)) {
+      setMessage(t("factures.pdfSeul"));
+      return;
+    }
+    setEnCours(true);
+    setMessage(t("factures.lecture"));
+    const recu = await lireOrdonnance(fichier);
+    setEnCours(false);
+    if (recu.status !== 200) {
+      setMessage(messageErreur(recu.data));
+      return;
+    }
+    const lue = (recu.data.ordonnance ?? {}) as Record<string, unknown>;
+    const lignes = Array.isArray(lue.lignes) ? (lue.lignes as LigneOrdonnance[]) : [];
+    setOrdonnance({
+      ordonnance_id: texte(lue.ordonnance_id, ""),
+      assure_id: texte(lue.assure_id, ""),
+      date_prescription: texte(lue.date_prescription, aujourdHui()),
+      validite_jours: typeof lue.validite_jours === "number" ? lue.validite_jours : 30,
+      lignes: lignes.length ? lignes : [{ code: "", quantite: 1 }],
+    });
+    setOrdonnanceOuverte(true);
+    setMessage(t("factures.ordonnanceAide"));
+  }
+
+  async function validerOrdonnance() {
+    const reference = ordonnance.ordonnance_id.trim();
+    if (!peutCreerOrdonnance) {
+      if (!reference) {
+        setMessage(t("erreurs.ACCES_REFUSE"));
+        return;
+      }
+      setFacture((actuel) => ({ ...actuel, ordonnance_id: reference }));
+      setMessage(t("factures.ordonnanceReportee"));
+      return;
+    }
+    setEnCours(true);
+    const recu = await confirmerOrdonnance({
+      assure_id: ordonnance.assure_id,
+      date_prescription: ordonnance.date_prescription,
+      validite_jours: Number(ordonnance.validite_jours),
+      lignes: ordonnance.lignes
+        .filter((ligne) => ligne.code.trim())
+        .map((ligne) => ({ code: ligne.code.trim(), quantite: Number(ligne.quantite) })),
+    });
+    setEnCours(false);
+    if (recu.status !== 201 && recu.status !== 200) {
+      setMessage(messageErreur(recu.data));
+      return;
+    }
+    const identifiant = texte(recu.data.ordonnance_id, reference);
+    setOrdonnance((actuel) => ({ ...actuel, ordonnance_id: identifiant }));
+    setFacture((actuel) => ({
+      ...actuel,
+      ordonnance_id: identifiant,
+      assure_id: actuel.assure_id || ordonnance.assure_id,
+    }));
+    setMessage(t("factures.ordonnanceConfirmee"));
+  }
+
   return (
     <div className="space-y-4">
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setEnCours(true);
-          const recu = await lirePdf(new FormData(event.currentTarget));
-          setEnCours(false);
-          if (recu.status !== 200) {
-            setMessage(messageErreur(recu.data));
-            return;
-          }
-          const lue = (recu.data.facture ?? {}) as Record<string, unknown>;
-          setFacture((actuel) => ({
-            ...actuel,
-            facture_id: texte(lue.facture_id, actuel.facture_id),
-            type_facture: texte(lue.type_facture, actuel.type_facture),
-            date_soin: texte(lue.date_soin, actuel.date_soin),
-            date_facture: texte(lue.date_facture, actuel.date_facture),
-            assure_id: texte(lue.assure_id, actuel.assure_id ?? ""),
-            ordonnance_id: texte(lue.ordonnance_id, actuel.ordonnance_id ?? ""),
-            contrat_id: texte(lue.contrat_id, actuel.contrat_id ?? ""),
-            prestataire_id: texte(lue.prestataire_id, actuel.prestataire_id ?? ""),
-            montant_total: typeof lue.montant_total === "number" ? lue.montant_total : actuel.montant_total,
-            canal_reception: "pdf",
-            lignes: Array.isArray(lue.lignes) && lue.lignes.length ? (lue.lignes as Ligne[]) : actuel.lignes,
-          }));
-        }}
-      >
-        <label>
-          <Etiquette>{t("factures.pdf")}</Etiquette>
-          <Champ name="fichier" type="file" accept="application/pdf" required />
-        </label>
-        <Button variante="secondary" disabled={enCours} type="submit">
-          {t("factures.lire")}
-        </Button>
-      </form>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Depot
+          consigne={t("factures.deposerPdf")}
+          action={t("factures.scannerFacture")}
+          occupe={enCours}
+          onScanner={(fichier) => void chargerFacture(fichier)}
+        />
+        <Depot
+          consigne={t("factures.deposerOrdonnance")}
+          action={t("factures.scannerOrdonnance")}
+          occupe={enCours}
+          onScanner={(fichier) => void chargerOrdonnance(fichier)}
+        />
+      </div>
       <p className="text-sm text-muted">{t("factures.pdfAide")}</p>
+      {ordonnanceOuverte ? (
+        <section className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+          <h2 className="text-xl font-semibold">{t("factures.ordonnance")}</h2>
+          <p className="text-sm text-muted">{t("factures.ordonnanceAide")}</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Saisie
+              label="factures.ordonnance"
+              value={ordonnance.ordonnance_id}
+              onChange={(v) => setOrdonnance((actuel) => ({ ...actuel, ordonnance_id: v }))}
+            />
+            <Saisie
+              label="factures.assure"
+              value={ordonnance.assure_id}
+              onChange={(v) => setOrdonnance((actuel) => ({ ...actuel, assure_id: v }))}
+            />
+            <Saisie
+              label="factures.datePrescription"
+              type="date"
+              value={ordonnance.date_prescription}
+              onChange={(v) => setOrdonnance((actuel) => ({ ...actuel, date_prescription: v }))}
+            />
+            <Saisie
+              label="factures.validite"
+              type="number"
+              value={String(ordonnance.validite_jours)}
+              onChange={(v) => setOrdonnance((actuel) => ({ ...actuel, validite_jours: Number(v) }))}
+            />
+          </div>
+          {ordonnance.lignes.map((ligne, index) => (
+            <div key={index} className="grid gap-3 md:grid-cols-2">
+              <Saisie
+                label="factures.code"
+                value={ligne.code}
+                onChange={(v) =>
+                  setOrdonnance((actuel) => ({
+                    ...actuel,
+                    lignes: actuel.lignes.map((item, position) => (position === index ? { ...item, code: v } : item)),
+                  }))
+                }
+              />
+              <Saisie
+                label="factures.quantite"
+                type="number"
+                value={String(ligne.quantite)}
+                onChange={(v) =>
+                  setOrdonnance((actuel) => ({
+                    ...actuel,
+                    lignes: actuel.lignes.map((item, position) =>
+                      position === index ? { ...item, quantite: Number(v) } : item,
+                    ),
+                  }))
+                }
+              />
+            </div>
+          ))}
+          <Button type="button" variante="secondary" disabled={enCours} onClick={() => void validerOrdonnance()}>
+            {t("factures.confirmerOrdonnance")}
+          </Button>
+        </section>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-2">
         <Saisie label="factures.identifiant" value={facture.facture_id} onChange={(v) => maj("facture_id", v)} />
         <Saisie label="factures.type" value={facture.type_facture} onChange={(v) => maj("type_facture", v)} />

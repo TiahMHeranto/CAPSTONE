@@ -55,4 +55,4 @@ La pile se lance avec `docker compose up`. Elle contient PostgreSQL (pgvector), 
 - **Image Docker** : les pins `cryptography` 50.0.0, `fastapi` 0.143.1 et `starlette` 1.8.0 sont dans le dépôt et le scan est propre. L'image qui tourne a été construite avant ce changement. Le prochain `docker compose build` l'aligne.
 - **Répétition sur un volume vide** : non rejouée ici, pour ne pas effacer la cohorte déjà chargée. La commande est dans le guide de répétition.
 
-Le compte assuré ne voit des remboursements que si `AUTH_ASSURE_ID` contient un pseudonyme de `clean.assures`. Tant que cette variable est vide, sa liste est vide.
+Le compte assuré ne voit des remboursements que s'il est rattaché, dans Utilisateurs, à un pseudonyme de `clean.assures`. Sans ce lien, sa liste est vide.

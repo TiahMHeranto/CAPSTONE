@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Coquille } from "@/components/coquille";
 import { COOKIE_THEME } from "@/lib/cookies";
 import { nomAffiche } from "@/lib/nom";
@@ -16,7 +16,8 @@ export const metadata: Metadata = { title: "PrediCare TPA" };
 export const dynamic = "force-dynamic";
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
-  const session = await lireSession();
+  const vitrine = (await headers()).get("x-vitrine") === "1";
+  const session = vitrine ? null : await lireSession();
   const theme = (await cookies()).get(COOKIE_THEME)?.value === "dark" ? "dark" : "light";
   let nom = "";
   let alertes = 0;

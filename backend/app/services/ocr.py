@@ -53,6 +53,11 @@ LIBELLES = {
     "mode de reglement": "mode_reglement",
 }
 
+_ORD_LIGNE = re.compile(
+    r"^([A-Za-z0-9._-]{1,64})\s*[|;,]\s*(?:(?:ACTE|MEDICAMENT)\s*[|;,]\s*)?"
+    r"(\d+(?:[.,]\d+)?)\b",
+    re.IGNORECASE,
+)
 _LIGNE = re.compile(
     r"^([A-Za-z0-9._-]{1,64})\s*[|;,]\s*(ACTE|MEDICAMENT)\s*[|;,]\s*"
     r"(\d+(?:[.,]\d+)?)\s*[|;,]\s*(\d[\d .]*)\s*[|;,]\s*(\d[\d .]*)\s*$",
@@ -379,3 +384,119 @@ def _normaliser(recu: dict) -> dict:
     if not lignes:
         manquants.append("lignes")
     return {"complet": not manquants, "champs_manquants": manquants, "facture": facture}
+
+
+def analyser_ordonnance(texte: str) -> dict:
+    trouves: dict = {"lignes": []}
+    for brute in texte.splitlines():
+        ligne = brute.strip()
+        if not ligne:
+            continue
+        detail = _LIGNE.fullmatch(ligne)
+        simple = None if detail else _ORD_LIGNE.match(ligne)
+        if detail or simple:
+            source = detail or simple
+            indice = 3 if detail else 2
+            trouves["lignes"].append(
+                {
+                    "code": source.group(1),
+                    "quantite": float(source.group(indice).replace(",", ".")),
+                }
+            )
+            continue
+        separe = re.match(r"^(.+?)\s*[:=]\s*(.+)$", ligne)
+        if not separe:
+            continue
+        etiquette = _norm(separe.group(1))
+        valeur = separe.group(2).strip().strip(".,;")
+        if etiquette in {"ordonnance", "ordonnance id", "n ordonnance"}:
+            if "ordonnance_id" not in trouves:
+                jeton = _jeton(valeur)
+                if jeton:
+                    trouves["ordonnance_id"] = jeton
+        elif etiquette in {"date de prescription", "date prescription", "date"}:
+            if "date_prescription" not in trouves:
+                iso = _date(valeur)
+                if iso:
+                    trouves["date_prescription"] = iso
+        elif etiquette in {"validite", "validite jours", "validite (jours)"}:
+            if "validite_jours" not in trouves:
+                nombre = _entier(valeur)
+                if nombre is not None and 1 <= nombre <= 365:
+                    trouves["validite_jours"] = nombre
+        elif etiquette in {"assure", "assure id", "n assure"} and "assure_id" not in trouves:
+            jeton = _jeton(valeur)
+            if jeton:
+                trouves["assure_id"] = jeton
+    return _corps_ordonnance(trouves)
+
+
+def extraire_ordonnance(contenu: bytes, nom: str) -> dict:
+    try:
+        texte, _moteur = lire_texte(contenu)
+    except PdfIllisible:
+        raise
+    local = analyser_ordonnance(texte)
+    recu = None
+    try:
+        recu = demander_workflow(contenu, nom)
+    except (LectureRefusee, WorkflowIndisponible):
+        recu = None
+    if recu and isinstance(recu.get("facture"), dict):
+        local = _fusionner_ordonnance(local, recu["facture"])
+    ordonnance = local["ordonnance"]
+    vide = not ordonnance.get("lignes") and not ordonnance.get("date_prescription")
+    vide = vide and not ordonnance.get("ordonnance_id")
+    if vide:
+        if not texte.strip():
+            raise LectureRefusee(
+                "PDF_SANS_TEXTE",
+                "aucune ligne lisible, ni dans le texte du PDF ni par OCR",
+            )
+        raise LectureRefusee(
+            "EXTRACTION_ILLISIBLE",
+            "le modele n'a pas renvoye une ordonnance lisible",
+        )
+    return local
+
+
+def _jeton(valeur: str) -> str | None:
+    propre = valeur.replace("/", "-").replace("\\", "-").replace(" ", "")
+    if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", propre):
+        return propre
+    return None
+
+
+def _corps_ordonnance(trouves: dict) -> dict:
+    ordonnance = {
+        "ordonnance_id": trouves.get("ordonnance_id") or "",
+        "assure_id": trouves.get("assure_id") or "",
+        "date_prescription": trouves.get("date_prescription") or "",
+        "validite_jours": trouves.get("validite_jours") or 30,
+        "lignes": trouves.get("lignes") or [],
+    }
+    manquants = []
+    if not ordonnance["date_prescription"]:
+        manquants.append("date_prescription")
+    if not ordonnance["lignes"]:
+        manquants.append("lignes")
+    return {"complet": not manquants, "champs_manquants": manquants, "ordonnance": ordonnance}
+
+
+def _fusionner_ordonnance(local: dict, facture: dict) -> dict:
+    trouves = dict(local["ordonnance"])
+    if not trouves.get("ordonnance_id"):
+        trouves["ordonnance_id"] = facture.get("ordonnance_id") or ""
+    if not trouves.get("assure_id"):
+        trouves["assure_id"] = facture.get("assure_id") or ""
+    if not trouves.get("date_prescription"):
+        trouves["date_prescription"] = facture.get("date_soin") or facture.get("date_facture") or ""
+    if not trouves.get("lignes"):
+        trouves["lignes"] = [
+            {"code": ligne["code"], "quantite": ligne["quantite"]}
+            for ligne in facture.get("lignes") or []
+            if isinstance(ligne, dict) and ligne.get("code")
+        ]
+    if not trouves.get("validite_jours"):
+        trouves["validite_jours"] = 30
+    return _corps_ordonnance(trouves)

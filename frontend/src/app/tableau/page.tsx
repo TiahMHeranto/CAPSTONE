@@ -11,7 +11,6 @@ import type { Reponse, Role } from "@/lib/types";
 import { redirect } from "next/navigation";
 
 const PLAFOND_FACTURES = 50;
-const PLAFOND_ORDONNANCES = 80;
 const PLAFOND_REMBOURSEMENTS = 100;
 
 export default async function Page() {
@@ -22,9 +21,8 @@ export default async function Page() {
   const profil = profilRecu.data;
   const personnel = session.role === "assure" || session.role === "prestataire";
   const bureau = session.role === "gestionnaire" || session.role === "administrateur";
-  const [factures, ordonnances, remboursements, bi, alertes, supervision] = await Promise.all([
+  const [factures, remboursements, bi, alertes, supervision] = await Promise.all([
     personnel ? appel("/me/factures") : vide(),
-    personnel ? appel("/me/ordonnances") : vide(),
     session.role === "assure" ? appel("/me/remboursements") : vide(),
     bureau ? appel("/bi") : vide(),
     bureau ? appel("/alerts") : vide(),
@@ -32,7 +30,6 @@ export default async function Page() {
   ]);
   const contrat = objet(profil.contrat);
   const lignesFactures = liste(factures, "factures");
-  const lignesOrdonnances = liste(ordonnances, "ordonnances");
   const lignesRemboursements = liste(remboursements, "remboursements");
   const lignesAlertes = liste(alertes, "alertes");
   const volumes = objet(bi?.data.volumes);
@@ -47,9 +44,7 @@ export default async function Page() {
         prenom={prenomAffiche(profil)}
         contrat={contrat}
         factures={lignesFactures}
-        ordonnances={lignesOrdonnances}
         compteFactures={compter(lignesFactures, factures, PLAFOND_FACTURES)}
-        compteOrdonnances={compter(lignesOrdonnances, ordonnances, PLAFOND_ORDONNANCES)}
         compteRemboursements={compter(lignesRemboursements, remboursements, PLAFOND_REMBOURSEMENTS)}
         aucunRemboursement={remboursements?.status === 200 && lignesRemboursements.length === 0}
       />
@@ -110,12 +105,6 @@ export default async function Page() {
               valeur={compter(lignesFactures, factures, PLAFOND_FACTURES)}
               plafond={lignesFactures.length >= PLAFOND_FACTURES}
             />
-            <Indicateur
-              href="/ordonnances"
-              titre={t("tableau.ordonnances")}
-              valeur={compter(lignesOrdonnances, ordonnances, PLAFOND_ORDONNANCES)}
-              plafond={lignesOrdonnances.length >= PLAFOND_ORDONNANCES}
-            />
           </>
         ) : null}
       </div>
@@ -134,16 +123,6 @@ export default async function Page() {
               </li>
             );
           })}
-        </Liste>
-      ) : null}
-      {personnel && lignesOrdonnances.length > 0 ? (
-        <Liste titre={t("tableau.recentesOrd")}>
-          {lignesOrdonnances.slice(0, 5).map((item) => (
-            <li key={String(item.ordonnance_id)} className="flex justify-between py-3 font-mono">
-              <span>{String(item.ordonnance_id)}</span>
-              <span>{dateCourte(String(item.date_prescription ?? ""))}</span>
-            </li>
-          ))}
         </Liste>
       ) : null}
     </>
@@ -294,7 +273,7 @@ function VueBureau({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <CarteKpi titre={t("tableau.dossiersRecus")} valeur={biOk && recus !== null ? nombreBrut(recus) : "—"} href="/pilotage" />
         <CarteKpi titre={t("tableau.montantEconomise")} valeur={biOk ? argentBrut(volumes.montant_economise) : "—"} href="/pilotage" />
-        <CarteKpi titre={t("tableau.decisions")} valeur={biOk ? nombreBrut(volumes.nb_decisions) : "—"} href="/decisions" />
+        <CarteKpi titre={t("tableau.decisions")} valeur={biOk ? nombreBrut(volumes.nb_decisions) : "—"} href="/pilotage" />
         <CarteKpi titre={t("tableau.aVerifier")} valeur={String(alertes.length)} href="/alertes" />
       </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)]">
@@ -361,7 +340,7 @@ function VueBureau({
       <section className="overflow-hidden rounded-2xl border border-border bg-surface">
         <div className="flex items-center justify-between px-4 py-3">
           <h2 className="font-semibold">{t("tableau.dossiersRecents")}</h2>
-          <Link className="text-sm font-medium" href="/decisions">
+          <Link className="text-sm font-medium" href="/pilotage">
             {t("tableau.voirDecisions")}
           </Link>
         </div>
@@ -434,9 +413,7 @@ function VueAssure({
   prenom,
   contrat,
   factures,
-  ordonnances,
   compteFactures,
-  compteOrdonnances,
   compteRemboursements,
   aucunRemboursement,
 }: {
@@ -444,9 +421,7 @@ function VueAssure({
   prenom: string;
   contrat: Record<string, unknown>;
   factures: Record<string, unknown>[];
-  ordonnances: Record<string, unknown>[];
   compteFactures: string;
-  compteOrdonnances: string;
   compteRemboursements: string;
   aucunRemboursement: boolean;
 }) {
@@ -459,9 +434,8 @@ function VueAssure({
           <h1 className="text-3xl font-semibold">{prenom ? `${t("tableau.bonjour")}, ${prenom}` : t("tableau.bonjour")}</h1>
           <p className="mt-1 text-sm text-muted">{t("tableau.introAssure")}</p>
         </header>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Compteur href="/factures" icone="facture" titre={t("tableau.factures")} valeur={compteFactures} lien={t("tableau.voirFactures")} />
-          <Compteur href="/ordonnances" icone="ordonnance" titre={t("tableau.ordonnances")} valeur={compteOrdonnances} lien={t("tableau.voirOrdonnances")} />
           <Compteur
             href="/remboursements"
             icone="remboursement"
@@ -489,20 +463,6 @@ function VueAssure({
               </tr>
             );
           })}
-        </Tableau>
-        <Tableau
-          titre={t("tableau.recentesOrd")}
-          href="/ordonnances"
-          compte={compteOrdonnances}
-          colonnes={[t("tableau.reference"), t("tableau.date"), ""]}
-        >
-          {ordonnances.slice(0, 5).map((item) => (
-            <tr key={String(item.ordonnance_id)} className="border-t border-border">
-              <td className="px-4 py-3">{String(item.ordonnance_id ?? "")}</td>
-              <td className="px-4 py-3 text-muted">{dateLongue(String(item.date_prescription ?? ""))}</td>
-              <td />
-            </tr>
-          ))}
         </Tableau>
       </div>
       <aside className="space-y-4">
@@ -545,7 +505,7 @@ function VueAssure({
               <dd>{contrat.date_effet ? dateCourte(String(contrat.date_effet)) : "—"}</dd>
             </div>
           </dl>
-          <Link className="mt-4 inline-flex text-sm font-medium text-primary" href="/garanties">
+          <Link className="mt-4 inline-flex text-sm font-medium text-primary" href="/assistant">
             {t("tableau.voirGaranties")} →
           </Link>
         </section>
