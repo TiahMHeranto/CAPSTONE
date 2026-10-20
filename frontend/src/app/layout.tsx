@@ -19,19 +19,28 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const session = await lireSession();
   const theme = (await cookies()).get(COOKIE_THEME)?.value === "dark" ? "dark" : "light";
   let nom = "";
-  if (session && !bureau(session.role)) {
+  let alertes = 0;
+  if (session) {
     try {
       const profil = await appel("/me/profil");
       if (profil.status === 200) nom = nomAffiche(profil.data);
     } catch {
       nom = "";
     }
+    if (bureau(session.role)) {
+      try {
+        const file = await appel("/alerts");
+        if (file.status === 200 && Array.isArray(file.data.alertes)) alertes = file.data.alertes.length;
+      } catch {
+        alertes = 0;
+      }
+    }
   }
   return (
     <html lang="fr" data-theme={theme} className={`${plex.variable} ${mono.variable}`}>
       <body>
         {session ? (
-          <Coquille session={session} theme={theme} nom={nom}>
+          <Coquille session={session} theme={theme} nom={nom} alertes={alertes}>
             {children}
           </Coquille>
         ) : (

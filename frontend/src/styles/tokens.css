@@ -45,3 +45,22 @@
   --risk-high: #ff8a5b;
   --risk-high-bg: #3d1c10;
 }
+
+.bureau {
+  --background: #f4f1ea;
+  --surface: #ffffff;
+  --surface-muted: #f7f4ee;
+  --border: #e7e1d6;
+  --foreground: #1c2430;
+  --muted-foreground: #667085;
+}
+
+[data-theme="dark"] .bureau {
+  --background: #12151c;
+  --surface: #1c2230;
+  --surface-muted: #171c27;
+  --border: #2c3344;
+  --foreground: #eef1f6;
+  --muted-foreground: #a3adbd;
+  --primary-soft: #243044;
+}

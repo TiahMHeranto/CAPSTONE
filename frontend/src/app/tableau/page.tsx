@@ -13,7 +13,6 @@ import { redirect } from "next/navigation";
 const PLAFOND_FACTURES = 50;
 const PLAFOND_ORDONNANCES = 80;
 const PLAFOND_REMBOURSEMENTS = 100;
-const PLAFOND_ALERTES = 100;
 
 export default async function Page() {
   const session = await lireSession();
@@ -23,13 +22,12 @@ export default async function Page() {
   const profil = profilRecu.data;
   const personnel = session.role === "assure" || session.role === "prestataire";
   const bureau = session.role === "gestionnaire" || session.role === "administrateur";
-  const [factures, ordonnances, remboursements, bi, alertes, anomalies, supervision] = await Promise.all([
+  const [factures, ordonnances, remboursements, bi, alertes, supervision] = await Promise.all([
     personnel ? appel("/me/factures") : vide(),
     personnel ? appel("/me/ordonnances") : vide(),
     session.role === "assure" ? appel("/me/remboursements") : vide(),
     bureau ? appel("/bi") : vide(),
     bureau ? appel("/alerts") : vide(),
-    bureau ? appel("/alerts/prescriptions") : vide(),
     session.role === "administrateur" ? appel("/admin/supervision") : vide(),
   ]);
   const contrat = objet(profil.contrat);
@@ -37,7 +35,6 @@ export default async function Page() {
   const lignesOrdonnances = liste(ordonnances, "ordonnances");
   const lignesRemboursements = liste(remboursements, "remboursements");
   const lignesAlertes = liste(alertes, "alertes");
-  const lignesAnomalies = liste(anomalies, "anomalies");
   const volumes = objet(bi?.data.volumes);
   const metriques = objet(supervision?.data.metriques);
   const latence = objet(metriques.latence_ms);
@@ -55,6 +52,25 @@ export default async function Page() {
         compteOrdonnances={compter(lignesOrdonnances, ordonnances, PLAFOND_ORDONNANCES)}
         compteRemboursements={compter(lignesRemboursements, remboursements, PLAFOND_REMBOURSEMENTS)}
         aucunRemboursement={remboursements?.status === 200 && lignesRemboursements.length === 0}
+      />
+    );
+  }
+
+  if (bureau) {
+    return (
+      <VueBureau
+        prenom={prenomAffiche(profil)}
+        repli={session.identifiant}
+        volumes={volumes}
+        biOk={bi?.status === 200}
+        alertes={lignesAlertes}
+        decisions={liste(bi, "decisions")}
+        distribution={repartition(bi)}
+        admin={session.role === "administrateur"}
+        supervisionOk={supervision?.status === 200}
+        metriques={metriques}
+        latence={latence}
+        derive={derive}
       />
     );
   }
@@ -102,33 +118,6 @@ export default async function Page() {
             />
           </>
         ) : null}
-        {bureau ? (
-          <>
-            <Indicateur href="/pilotage" titre={t("admin.volumes")} valeur={nombre(volumes.nb_factures, bi)} />
-            <Indicateur
-              href="/alertes"
-              titre={t("tableau.alertes")}
-              valeur={compter(lignesAlertes, alertes, PLAFOND_ALERTES)}
-              plafond={lignesAlertes.length >= PLAFOND_ALERTES}
-            />
-            <Indicateur titre={t("tableau.anomalies")} valeur={compter(lignesAnomalies, anomalies, 100)} />
-            <Indicateur href="/decisions" titre={t("admin.decisions")} valeur={nombre(volumes.nb_decisions, bi)} />
-            <Indicateur href="/pilotage" titre={t("admin.economise")} valeur={argent(volumes.montant_economise, bi)} />
-            <Indicateur href="/pilotage" titre={t("admin.detection")} valeur={taux(volumes.taux_detection, bi)} />
-          </>
-        ) : null}
-        {session.role === "administrateur" && supervision?.status === 200 ? (
-          <>
-            <Indicateur href="/supervision" titre={t("admin.volume")} valeur={texte(metriques.volume)} />
-            <Indicateur href="/supervision" titre={t("admin.erreurs")} valeur={texte(metriques.erreurs)} />
-            <Indicateur
-              href="/supervision"
-              titre={t("admin.latence")}
-              valeur={`${texte(latence.p50)} / ${texte(latence.p95)}`}
-            />
-            <Indicateur href="/supervision" titre={t("tableau.derive")} valeur={texte(derive.etat)} />
-          </>
-        ) : null}
       </div>
       {personnel && lignesFactures.length > 0 ? (
         <Liste titre={t("tableau.recentes")}>
@@ -155,21 +144,6 @@ export default async function Page() {
               <span>{dateCourte(String(item.date_prescription ?? ""))}</span>
             </li>
           ))}
-        </Liste>
-      ) : null}
-      {bureau && lignesAlertes.length > 0 ? (
-        <Liste titre={t("tableau.recentesAlertes")}>
-          {lignesAlertes.slice(0, 5).map((item) => {
-            const id = String(item.facture_id ?? "");
-            return (
-              <li key={id} className="flex justify-between py-3">
-                <Link className="font-mono" href={`/factures/${id}`}>
-                  {id}
-                </Link>
-                <span className="tabular-nums">{score(Number(item.score ?? 0))}</span>
-              </li>
-            );
-          })}
         </Liste>
       ) : null}
     </>
@@ -233,22 +207,6 @@ function compter(lignes: Record<string, unknown>[], recu: Reponse | null, plafon
   return String(lignes.length);
 }
 
-function nombre(valeur: unknown, recu: Reponse | null): string {
-  if (!recu || recu.status !== 200 || typeof valeur !== "number") return "—";
-  return new Intl.NumberFormat("fr-FR").format(valeur);
-}
-
-function argent(valeur: unknown, recu: Reponse | null): string {
-  if (!recu || recu.status !== 200 || typeof valeur !== "number") return "—";
-  return montant(valeur, "MGA");
-}
-
-function taux(valeur: unknown, recu: Reponse | null): string {
-  if (!recu || recu.status !== 200 || typeof valeur !== "number") return "—";
-  const ratio = valeur <= 1 ? valeur : valeur / 100;
-  return new Intl.NumberFormat("fr-FR", { style: "percent", maximumFractionDigits: 1 }).format(ratio);
-}
-
 function liste(recu: Reponse | null, cle: string): Record<string, unknown>[] {
   if (!recu || recu.status !== 200 || !Array.isArray(recu.data[cle])) return [];
   return recu.data[cle] as Record<string, unknown>[];
@@ -265,6 +223,203 @@ function texte(valeur: unknown): string {
 
 function vide(): Promise<Reponse | null> {
   return Promise.resolve(null);
+}
+
+function repartition(recu: Reponse | null): { tranche: string; nb: number }[] {
+  if (!recu || recu.status !== 200 || !Array.isArray(recu.data.distribution)) return [];
+  const sommes = new Map<string, number>();
+  for (const ligne of recu.data.distribution as Record<string, unknown>[]) {
+    const tranche = String(ligne.tranche ?? "");
+    const nb = typeof ligne.nb === "number" ? ligne.nb : 0;
+    if (!tranche) continue;
+    sommes.set(tranche, (sommes.get(tranche) ?? 0) + nb);
+  }
+  return [...sommes.entries()].map(([tranche, nb]) => ({ tranche, nb }));
+}
+
+function VueBureau({
+  prenom,
+  repli,
+  volumes,
+  biOk,
+  alertes,
+  decisions,
+  distribution,
+  admin,
+  supervisionOk,
+  metriques,
+  latence,
+  derive,
+}: {
+  prenom: string;
+  repli: string;
+  volumes: Record<string, unknown>;
+  biOk: boolean;
+  alertes: Record<string, unknown>[];
+  decisions: Record<string, unknown>[];
+  distribution: { tranche: string; nb: number }[];
+  admin: boolean;
+  supervisionOk: boolean;
+  metriques: Record<string, unknown>;
+  latence: Record<string, unknown>;
+  derive: Record<string, unknown>;
+}) {
+  const salut = prenom || repli;
+  const recus = typeof volumes.nb_factures === "number" ? volumes.nb_factures : null;
+  const normales = typeof volumes.nb_normales === "number" ? volumes.nb_normales : 0;
+  const signalees = typeof volumes.nb_alertes_modele === "number" ? volumes.nb_alertes_modele : 0;
+  const rejets = typeof volumes.nb_rejets === "number" ? volumes.nb_rejets : 0;
+  const totalParts = normales + signalees + rejets;
+  const part = (valeur: number) => (totalParts > 0 ? (valeur / totalParts) * 100 : 0);
+  const anneau = `conic-gradient(#1f8a70 0 ${part(normales)}%, #e07a3d ${part(normales)}% ${part(normales) + part(signalees)}%, #c2410c ${part(normales) + part(signalees)}% 100%)`;
+  const maxScore = Math.max(1, ...distribution.map((ligne) => ligne.nb));
+  const mois = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date());
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs tracking-wide text-muted">{t("tableau.regard")}</p>
+          <h1 className="mt-1 text-3xl font-semibold">{t("nav.tableau")}</h1>
+          <p className="mt-1 text-sm text-muted">
+            {t("tableau.bonjour")} {salut}, {t("tableau.bonjourActivite")}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-xl border border-border bg-surface px-3 py-2 text-sm">{mois}</span>
+          <Link className="rounded-xl bg-foreground px-4 py-2 text-sm text-background" href="/factures">
+            {t("tableau.voirDossiers")}
+          </Link>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <CarteKpi titre={t("tableau.dossiersRecus")} valeur={biOk && recus !== null ? nombreBrut(recus) : "—"} href="/pilotage" />
+        <CarteKpi titre={t("tableau.montantEconomise")} valeur={biOk ? argentBrut(volumes.montant_economise) : "—"} href="/pilotage" />
+        <CarteKpi titre={t("tableau.decisions")} valeur={biOk ? nombreBrut(volumes.nb_decisions) : "—"} href="/decisions" />
+        <CarteKpi titre={t("tableau.aVerifier")} valeur={String(alertes.length)} href="/alertes" />
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)]">
+        <section className="rounded-2xl border border-border bg-surface p-4">
+          <h2 className="font-semibold">{t("tableau.activite")}</h2>
+          {distribution.length === 0 ? (
+            <p className="mt-6 text-sm text-muted">{t("tableau.activiteVide")}</p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {distribution.map((ligne) => (
+                <li key={ligne.tranche}>
+                  <div className="mb-1 flex justify-between text-sm">
+                    <span>{ligne.tranche}</span>
+                    <span className="tabular-nums text-muted">{ligne.nb}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-surface-muted">
+                    <div className="h-2 rounded-full bg-primary" style={{ width: `${(ligne.nb / maxScore) * 100}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="rounded-2xl border border-border bg-surface p-4">
+          <h2 className="font-semibold">{t("tableau.repartition")}</h2>
+          <p className="text-sm text-muted">{biOk && recus !== null ? `${nombreBrut(recus)} ${t("tableau.dossiersRecus").toLowerCase()}` : "—"}</p>
+          <div className="mt-4 flex items-center gap-4">
+            <div className="grid h-28 w-28 place-items-center rounded-full" style={{ background: totalParts > 0 ? anneau : "var(--surface-muted)" }}>
+              <div className="grid h-16 w-16 place-items-center rounded-full bg-surface text-sm font-semibold">
+                {totalParts > 0 ? `${Math.round(part(normales))} %` : "—"}
+              </div>
+            </div>
+            <ul className="space-y-2 text-sm">
+              <li>{t("tableau.sansAlerte")} · {normales}</li>
+              <li>{t("tableau.alertesModele")} · {signalees}</li>
+              <li>{t("tableau.rejets")} · {rejets}</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
+        <p className="text-sm">
+          {alertes.length > 0 ? t("tableau.attention") : t("tableau.aucuneAlerte")}
+          {alertes.length > 0 ? <span className="mt-1 block text-muted">{alertes.length}</span> : null}
+        </p>
+        <Link className="text-sm font-medium" href="/alertes">
+          {t("tableau.examiner")}
+        </Link>
+      </section>
+      {alertes.length > 0 ? (
+        <div className="grid gap-3 lg:grid-cols-3">
+          {alertes.slice(0, 3).map((item) => {
+            const id = String(item.facture_id ?? "");
+            return (
+              <Link key={id} className="rounded-2xl border border-border bg-surface p-4" href={`/factures/${id}`}>
+                <p className="font-mono text-sm">{id}</p>
+                <p className="mt-3 text-2xl font-semibold tabular-nums">{score(Number(item.score ?? 0))}</p>
+                <p className="mt-2 text-sm text-risk-medium">{t("tableau.aRevoir")}</p>
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+      <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+        <div className="flex items-center justify-between px-4 py-3">
+          <h2 className="font-semibold">{t("tableau.dossiersRecents")}</h2>
+          <Link className="text-sm font-medium" href="/decisions">
+            {t("tableau.voirDecisions")}
+          </Link>
+        </div>
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs text-muted">
+            <tr>
+              <th className="px-4 py-2 font-normal">{t("tableau.colonneDossier")}</th>
+              <th className="px-4 py-2 font-normal">{t("tableau.colonneDecision")}</th>
+              <th className="px-4 py-2 font-normal">{t("tableau.colonneDate")}</th>
+              <th className="px-4 py-2 text-right font-normal">{t("tableau.colonneScore")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {decisions.slice(0, 5).map((item) => {
+              const id = String(item.facture_id ?? "");
+              return (
+                <tr key={`${id}-${String(item.created_at)}`} className="border-t border-border">
+                  <td className="px-4 py-3">
+                    <Link className="font-mono" href={`/factures/${id}`}>{id}</Link>
+                  </td>
+                  <td className="px-4 py-3">{texte(item.decision)}</td>
+                  <td className="px-4 py-3 text-muted">{dateCourte(String(item.created_at ?? ""))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{typeof item.score === "number" ? score(item.score) : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+      {admin && supervisionOk ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Indicateur href="/supervision" titre={t("admin.volume")} valeur={texte(metriques.volume)} />
+          <Indicateur href="/supervision" titre={t("admin.erreurs")} valeur={texte(metriques.erreurs)} />
+          <Indicateur href="/supervision" titre={t("admin.latence")} valeur={`${texte(latence.p50)} / ${texte(latence.p95)}`} />
+          <Indicateur href="/supervision" titre={t("tableau.derive")} valeur={texte(derive.etat)} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CarteKpi({ titre, valeur, href }: { titre: string; valeur: string; href: string }) {
+  return (
+    <Link className="rounded-2xl border border-border bg-surface p-4" href={href}>
+      <h2 className="text-sm text-muted">{titre}</h2>
+      <p className="mt-2 text-3xl font-semibold tabular-nums">{valeur}</p>
+    </Link>
+  );
+}
+
+function nombreBrut(valeur: unknown): string {
+  if (typeof valeur !== "number") return "—";
+  return new Intl.NumberFormat("fr-FR").format(valeur);
+}
+
+function argentBrut(valeur: unknown): string {
+  if (typeof valeur !== "number") return "—";
+  return montant(valeur, "MGA");
 }
 
 function dateLongue(valeur: string): string {
@@ -351,7 +506,7 @@ function VueAssure({
         </Tableau>
       </div>
       <aside className="space-y-4">
-        <section className="rounded-2xl border border-border bg-white p-4">
+        <section className="rounded-2xl border border-border bg-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">{t("tableau.monContrat")}</h2>
             {actif ? (
@@ -416,7 +571,7 @@ function Compteur({
   note?: string;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-white p-4">
+    <section className="rounded-2xl border border-border bg-surface p-4">
       <div className="flex items-center gap-2 text-sm text-muted">
         <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-soft text-primary">
           <IconeCompteur nom={icone} />
@@ -474,7 +629,7 @@ function Tableau({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-white">
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <h2 className="font-semibold">{titre}</h2>
         <Link className="text-sm font-medium text-primary" href={href}>

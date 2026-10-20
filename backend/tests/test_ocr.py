@@ -70,18 +70,19 @@ def test_analyse_signale_les_champs_absents() -> None:
     assert "lignes" in recu["champs_manquants"]
 
 
-def test_workflow_recoit_un_fichier_et_appelle_ollama() -> None:
+def test_workflow_recoit_un_fichier_et_appelle_le_modele() -> None:
     workflow = json.loads((RACINE / "n8n" / "workflows" / "ocr.json").read_text(encoding="utf-8"))
     noms = [noeud["name"] for noeud in workflow["nodes"]]
     assert noms[0] == "Depot PDF"
     assert workflow["nodes"][0]["parameters"]["path"] == "ocr"
     assert "Regrouper fichiers" in noms
-    assert "Extraction Ollama" in noms
+    assert "Extraction modele" in noms
     assert "Parser et eclater" in noms
     texte = json.dumps(workflow)
-    assert "google" not in texte.lower()
-    assert "gemini" not in texte.lower()
-    assert "ollama:11434" in texte
+    assert "generativelanguage.googleapis.com" in texte
+    assert ":generateContent" in texte
+    assert "gemma-4-26b-a4b-it" in texte
+    assert "ollama" not in texte.lower()
     regrouper = (RACINE / "n8n" / "workflows" / "ocr-regrouper.js").read_text(encoding="utf-8")
     code = next(
         noeud["parameters"]["jsCode"]
@@ -100,7 +101,7 @@ def test_extract_remplit_depuis_le_pdf(client: TestClient, entete, monkeypatch) 
         return _reponse_workflow(
             {
                 "ok": True,
-                "moteur": "ollama",
+                "moteur": "api",
                 "factures": [
                     {
                         "facture_id": "FAC-OCR-1",
@@ -132,7 +133,7 @@ def test_extract_remplit_depuis_le_pdf(client: TestClient, entete, monkeypatch) 
     )
     assert reponse.status_code == 200
     corps = reponse.json()
-    assert corps["moteur"] == "ollama"
+    assert corps["moteur"] == "api"
     assert "email" not in corps["facture"]
     assert corps["facture"]["facture_id"] == "FAC-OCR-1"
     assert corps["facture"]["canal_reception"] == "pdf"

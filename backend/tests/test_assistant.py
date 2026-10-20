@@ -2,7 +2,18 @@ from app.core.tokens import Principal
 from app.rag.chunks import contrat_de, decouper
 from app.rag.glossaire import expandre, formule_recherche, texte_recherche
 from app.rag.route import intention
-from app.services.assistant import repondre
+from app.services.assistant import _separe, repondre
+
+
+def test_separe_la_pensee_de_la_reponse() -> None:
+    reponse, pensee = _separe(
+        [
+            {"text": "The user said hello", "thought": True},
+            {"text": "Bonjour. Je peux vous aider."},
+        ]
+    )
+    assert reponse == "Bonjour. Je peux vous aider."
+    assert "hello" in pensee
 
 
 def test_decoupage_court() -> None:
@@ -129,7 +140,7 @@ def test_conditions_particulieres_reservees(monkeypatch) -> None:
 
     def memoriser(*args):
         fiches.append(args[-1])
-        return "plafond 3 000 000 Ar"
+        return "plafond 3 000 000 Ar", ""
 
     monkeypatch.setattr("app.services.assistant.generer", memoriser)
     monkeypatch.setattr(
@@ -197,7 +208,7 @@ def _brancher(monkeypatch, journal: list, agent: list, outils: list[str]) -> Non
     monkeypatch.setattr("app.services.assistant.ouvrir", lambda: _Base(journal))
     monkeypatch.setattr("app.services.assistant.ouvrir_agent", lambda: _Agent(agent))
     monkeypatch.setattr("app.services.assistant.embarquer", lambda _texte: [0.1] * 768)
-    monkeypatch.setattr("app.services.assistant.generer", lambda *_args: "reponse")
+    monkeypatch.setattr("app.services.assistant.generer", lambda *_args: ("reponse", ""))
     monkeypatch.setattr("app.services.assistant.choisir_outils", lambda _question, _role: outils)
     monkeypatch.setattr(
         "app.services.assistant.proposer_sql", lambda _question, erreur="": _SQL_LISTE

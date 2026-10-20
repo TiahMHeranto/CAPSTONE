@@ -5,7 +5,7 @@ On le reconstruit avec des outils, pas avec une liste de mots en dur.
 
 But
 ---
-Llama 3.2 (Ollama) choisit lui-même l'outil selon la question :
+Gemma 4 (API Google AI Studio, LLM_MODEL) choisit lui-même l'outil selon la question :
 
   search_documents  recherche vectorielle déjà en place (PDF, pgvector)
   query_database    question en français -> SQL -> résultat brut -> phrase
@@ -18,12 +18,9 @@ l'outil dont il a besoin. Une question peut appeler les deux
 1. Architecture : Retrieval-as-Tool
 -------------------------------
 Rester dans l'assistant FastAPI existant (backend/app/services/assistant.py).
-Pas de second écran, pas de Chainlit, pas d'appel à un modèle externe :
-les factures restent sur Ollama.
-
-Ollama expose le function calling natif sur POST /api/chat, champ "tools".
-Llama 3.2 3B est le modèle déjà configuré (OLLAMA_MODEL). La 3B est le
-minimum raisonnable pour écrire du SQL ; ne pas descendre sur la 1B.
+Pas de second écran, pas de Chainlit.
+Le dialogue passe par POST {LLM_BASE_URL}/models/{LLM_MODEL}:generateContent.
+Le modèle par défaut est gemma-4-26b-a4b-it. La clef Google AI Studio est LLM_API_KEY, hors du dépôt.
 
 Deux outils déclarés au modèle :
 
@@ -154,7 +151,7 @@ Le modèle ne devine pas l'assuré ni l'établissement.
 -----------------------------------------------
 Déjà là, à réutiliser :
   PostgreSQL 16 + pgvector
-  Ollama llama3.2 et nomic-embed-text
+  Gemma 4 (LLM_MODEL) et embeddings 768 (gemini-embedding-001)
   Rôle prediccare_agent et politiques agent_assure
   Recherche PDF, glossaire, filtre de formule
   Cache app.assistant_cache (le vider à chaque changement de prompt)

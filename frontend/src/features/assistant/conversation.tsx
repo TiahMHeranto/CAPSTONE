@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Button, Champ } from "@/components/ui";
 import { demander } from "@/features/assistant/api";
@@ -7,7 +8,14 @@ import { FormattedText } from "@/features/assistant/texte";
 import { messageErreur, t } from "@/i18n/traduire";
 
 type Source = { source?: string; page?: number | null };
-type Message = { id: string; role: "user" | "assistant"; texte: string; sources: Source[]; sansSource: boolean };
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  texte: string;
+  sources: Source[];
+  sansSource: boolean;
+  raisonnement: string;
+};
 type Onglet = "chat" | "base";
 
 const SUGGESTIONS = ["assistant.s1", "assistant.s2", "assistant.s3", "assistant.s4"];
@@ -77,7 +85,7 @@ export function Conversation({
     const propre = texte.trim().slice(0, 2000);
     if (!propre || enCours) return;
     setQuestion("");
-    setMessages((liste) => [...liste, { id: `u-${liste.length}`, role: "user", texte: propre, sources: [], sansSource: false }]);
+    setMessages((liste) => [...liste, { id: `u-${liste.length}`, role: "user", texte: propre, sources: [], sansSource: false, raisonnement: "" }]);
     setEnCours(true);
     let recu;
     try {
@@ -86,7 +94,7 @@ export function Conversation({
       setEnCours(false);
       setMessages((liste) => [
         ...liste,
-        { id: `a-${liste.length}`, role: "assistant", texte: t("erreur"), sources: [], sansSource: false },
+        { id: `a-${liste.length}`, role: "assistant", texte: t("erreur"), sources: [], sansSource: false, raisonnement: "" },
       ]);
       return;
     }
@@ -94,14 +102,16 @@ export function Conversation({
     if (recu.status === 422) {
       setMessages((liste) => [
         ...liste,
-        { id: `a-${liste.length}`, role: "assistant", texte: t("assistant.hors"), sources: [], sansSource: false },
+        { id: `a-${liste.length}`, role: "assistant", texte: t("assistant.hors"), sources: [], sansSource: false, raisonnement: "" },
       ]);
       return;
     }
     if (recu.status !== 200) {
+      const texte =
+        recu.data.code === "MODELE_INDISPONIBLE" ? t("assistant.indisponible") : messageErreur(recu.data);
       setMessages((liste) => [
         ...liste,
-        { id: `a-${liste.length}`, role: "assistant", texte: messageErreur(recu.data), sources: [], sansSource: false },
+        { id: `a-${liste.length}`, role: "assistant", texte, sources: [], sansSource: false, raisonnement: "" },
       ]);
       return;
     }
@@ -114,6 +124,7 @@ export function Conversation({
         texte: String(recu.data.reponse ?? ""),
         sources,
         sansSource: sources.length === 0,
+        raisonnement: String(recu.data.raisonnement ?? ""),
       },
     ]);
   }
@@ -121,8 +132,9 @@ export function Conversation({
   if (compact) {
     const date = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     return (
-      <div className="flex h-full min-h-0 flex-col bg-white text-foreground">
-        <div className="flex gap-1 border-b border-border px-3 py-2" role="tablist">
+      <div className="flex h-full min-h-0 flex-col bg-surface text-foreground">
+        <div className="flex gap-1 border-b border-border px-3 py-2">
+          <div className="flex gap-1" role="tablist">
           <button
             type="button"
             role="tab"
@@ -143,6 +155,10 @@ export function Conversation({
             <IconeLivre />
             {t("assistant.ongletBase")}
           </button>
+          </div>
+          <Link className="ml-auto inline-flex min-h-11 items-center px-2 text-sm text-muted" href="/assistant">
+            {t("assistant.page")}
+          </Link>
         </div>
         {onglet === "base" ? (
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
@@ -189,7 +205,7 @@ export function Conversation({
                   className={
                     message.role === "user"
                       ? "ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-foreground"
-                      : "max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-white px-3 py-2 text-sm"
+                      : "max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-sm"
                   }
                 >
                   {message.role === "assistant" ? <FormattedText texte={message.texte} /> : <p>{message.texte}</p>}
@@ -209,6 +225,12 @@ export function Conversation({
                       </ul>
                     </details>
                   ) : null}
+                  {message.raisonnement ? (
+                    <details className="mt-2 text-xs">
+                      <summary>{t("assistant.raisonnement")}</summary>
+                      <p className="mt-2 whitespace-pre-wrap text-muted">{message.raisonnement}</p>
+                    </details>
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -219,7 +241,7 @@ export function Conversation({
                 void envoyer(question);
               }}
             >
-              <div className="flex items-center gap-2 rounded-full border border-border bg-white pl-4 pr-1">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-surface pl-4 pr-1">
                 <label className="sr-only" htmlFor="question-widget">
                   {t("assistant.message")}
                 </label>
@@ -251,7 +273,7 @@ export function Conversation({
           </>
         )}
         {conseiller ? (
-          <dialog open className="rounded-2xl border border-border bg-white p-4 text-foreground">
+          <dialog open className="rounded-2xl border border-border bg-surface p-4 text-foreground">
             <p>{t("assistant.conseillerTexte")}</p>
             <Button className="mt-3" type="button" onClick={() => setConseiller(false)}>
               {t("annuler")}
@@ -302,6 +324,12 @@ export function Conversation({
                     </li>
                   ))}
                 </ul>
+              </details>
+            ) : null}
+            {message.raisonnement ? (
+              <details className="mt-2 text-sm">
+                <summary>{t("assistant.raisonnement")}</summary>
+                <p className="mt-2 whitespace-pre-wrap text-muted">{message.raisonnement}</p>
               </details>
             ) : null}
           </article>

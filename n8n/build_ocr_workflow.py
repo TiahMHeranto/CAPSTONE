@@ -149,7 +149,7 @@ workflow = {
             "typeVersion": 2.2,
             "position": [1440, 300],
         },
-        code("Extraction Ollama", "ocr-extraire.js", 1680),
+        code("Extraction modele", "ocr-extraire.js", 1680),
         code("Parser et eclater", "ocr-parser.js", 1920),
         code("Assembler", "ocr-assembler.js", 2160),
         echec("Echec lecture", "LECTURE_INDISPONIBLE", 960),
@@ -185,10 +185,12 @@ workflow = {
         "Texte absent": {
             "main": [
                 [{"node": "Reponse", "type": "main", "index": 0}],
-                [{"node": "Extraction Ollama", "type": "main", "index": 0}],
+                [{"node": "Extraction modele", "type": "main", "index": 0}],
             ]
         },
-        "Extraction Ollama": {"main": [[{"node": "Parser et eclater", "type": "main", "index": 0}]]},
+        "Extraction modele": {
+            "main": [[{"node": "Parser et eclater", "type": "main", "index": 0}]]
+        },
         "Parser et eclater": {"main": [[{"node": "Assembler", "type": "main", "index": 0}]]},
         "Assembler": {"main": [[{"node": "Reponse", "type": "main", "index": 0}]]},
         "Echec lecture": {"main": [[{"node": "Reponse", "type": "main", "index": 0}]]},
