@@ -39,8 +39,6 @@ services:
       PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-change-me-pii}
       AGE_REFERENCE_YEAR: ${AGE_REFERENCE_YEAR:-2026}
       RETENTION_IDENTITES_YEARS: ${RETENTION_IDENTITES_YEARS:-5}
-      AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-change-me-demo}
-      AUTH_ASSURE_ID: ${AUTH_ASSURE_ID:-}
     volumes:
       - ./CohorteAI_datagen/dataset:/data/dataset:ro
       - ./CohorteAI_datagen/labels:/data/labels:ro

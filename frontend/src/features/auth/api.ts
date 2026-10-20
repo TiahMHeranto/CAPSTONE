@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE_ACTIVITE, COOKIE_SESSION } from "@/lib/cookies";
+import { appel } from "@/lib/api/serveur";
 import { accueil } from "@/lib/session";
 import { estRole } from "@/lib/types";
 
@@ -30,6 +31,10 @@ export async function connecter(formData: FormData): Promise<{ erreur: string } 
   });
   jar.set(COOKIE_ACTIVITE, String(Date.now()), { httpOnly: true, sameSite: "lax", path: "/" });
   redirect(accueil(data.role));
+}
+
+export async function changerMotDePasse(corps: { actuel: string; nouveau: string; confirmation: string }) {
+  return appel("/me/mot-de-passe", { method: "POST", body: corps });
 }
 
 export async function quitter() {

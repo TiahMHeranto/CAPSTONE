@@ -11,7 +11,7 @@ docker compose up --build
 
 Puis ouvrir `http://localhost:3000`. La santé de l'API est `http://localhost:8000/health` : `"status": "ok"` et `"model_version": "v2"`.
 
-Les comptes créés au premier passage sont `prestataire`, `assure`, `gestionnaire` et `administrateur`. Le mot de passe est `AUTH_DEMO_PASSWORD`. Chaque rôle arrive sur un tableau de bord : profil, contrat et formule quand le compte est rattaché, volumes de factures et d'ordonnances, et, pour le gestionnaire et l'administrateur, alertes, décisions et taux de détection.
+Le seul compte créé au démarrage est l'administrateur `predicare`, mot de passe `predicareAdmin`, adresse `predicare@prediccare.mg`. Les comptes assuré, professionnel et gestionnaire se créent ensuite dans l'écran Utilisateurs. Chaque rôle arrive sur un tableau de bord.
 
 n8n écoute sur `http://localhost:5678`. Superset écoute sur `http://localhost:8088` et lit le schéma `bi`.
 
@@ -84,6 +84,10 @@ La lecture d'un PDF est décrite dans `docs/04-workflow/fiche-ocr.md`. Ollama do
 
 La grille des contrôles et les fichiers qui les prouvent sont dans `docs/07-securite/mecanismes.md`. La répétition de bout en bout est `ops/repetition.py`, décrite dans `docs/06-exploitation/repetition.md`.
 
+## Livrables
+
+Le dossier lu avant la soutenance est dans `docs/livrables/` : guide utilisateur, guide d'exploitation, pilotage, FinOps, conformité, sécurité, support oral.
+
 ## Suite
 
-L'interface couvre les quatre parcours. Le guide utilisateur, les slides et le dossier restent collectifs. Le détail de la part plateforme est dans `PLAN_MEMBRE_2.md`.
+L'interface couvre les quatre parcours. Le détail de la part plateforme est dans `PLAN_MEMBRE_2.md`.

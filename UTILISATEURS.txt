@@ -7,17 +7,12 @@ que deux populations : les prestataires qui facturent, et les assurés couverts.
 Le gestionnaire et l'administrateur ne sont pas des personnes du fichier. Ce
 sont des fonctions de la compagnie qui gère le tiers payant.
 
-En base, quatre comptes de démonstration existent dans app.utilisateurs. Ils
-sont actifs. Aucun n'est relié à une personne du jeu tant que AUTH_ASSURE_ID
-est vide.
+En base, un seul compte est créé par la migration : l'administrateur
+predicare, adresse predicare@prediccare.mg, mot de passe predicareAdmin.
+Il n'est relié à aucune personne du jeu. Les comptes professionnel, assuré
+et gestionnaire se créent ensuite dans l'écran Utilisateurs. Un assuré ou
+un professionnel doit être rattaché à une personne de la liste.
 
-  Identifiant       Rôle              Personne liée
-  prestataire       prestataire       aucune
-  assure            assure            aucune
-  gestionnaire      gestionnaire      aucune
-  administrateur    administrateur    aucune
-
-Le mot de passe est celui de AUTH_DEMO_PASSWORD, posé au premier chargement.
 Le rôle est recopié dans le jeton. Une route refuse un rôle qui n'est pas le
 sien.
 
@@ -103,8 +98,8 @@ mines et énergie 54.
 
 Le nom, les prénoms, le téléphone, l'e-mail, l'adresse et le CIN sont dans
 dataset/identites_pii.csv, une ligne par assuré. En base, ces champs sont
-chiffrés. L'application ne sert que le pseudonyme. Le compte de démonstration
-assure n'est lié à aucune de ces personnes tant que AUTH_ASSURE_ID est vide.
+chiffrés. L'application ne sert que le pseudonyme. Le compte assuré se crée
+dans Utilisateurs et se rattache à l'une de ces personnes.
 
 
 3. Gestionnaires
@@ -118,8 +113,8 @@ tranche : valider, rejeter avec un motif, ou demander un complément. L'alerte
 n'est jamais un refus automatique. Il voit toutes les factures, la synthèse
 des volumes et le pilotage. Il peut interroger l'assistant sur les garanties.
 
-En base, un seul compte de démonstration : gestionnaire. Pas de nom, pas de
-ville, pas de contrat, pas de lien vers un assuré.
+Aucun compte gestionnaire n'est livré. Il se crée dans Utilisateurs. Pas de
+nom, pas de ville, pas de contrat, pas de lien vers un assuré.
 
 
 4. Administrateurs
@@ -134,5 +129,5 @@ service, les volumes, la latence, les erreurs et la dérive. Avec la clef
 administrateur, il peut relire ou effacer l'identité chiffrée d'un pseudonyme.
 Cet acte est audité.
 
-En base, un seul compte de démonstration : administrateur. Pas de nom, pas de
-ville, pas de contrat, pas de lien vers un assuré.
+En base, le compte livré est predicare, rôle administrateur. Pas de nom, pas
+de ville, pas de contrat, pas de lien vers un assuré.

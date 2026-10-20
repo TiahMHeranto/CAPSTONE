@@ -19,6 +19,7 @@ from app.services.ocr import (
     PdfIllisible,
     WorkflowIndisponible,
     demander_workflow,
+    extraire_ordonnance,
     lire_fichiers,
 )
 from app.services.referentiel import lire_codes
@@ -91,6 +92,38 @@ def extract_invoice(
         return JSONResponse(
             status_code=503,
             content={"code": exc.code, "motif": exc.motif},
+        )
+    return JSONResponse(status_code=200, content=resultat)
+
+
+@router.post("/ordonnances/extract")
+def extract_prescription(
+    fichier: Annotated[UploadFile, File()],
+    _principal: Annotated[
+        Principal, Depends(exiger("prestataire", "gestionnaire", "administrateur"))
+    ],
+) -> JSONResponse:
+    contenu = fichier.file.read(TAILLE_MAX + 1)
+    if len(contenu) > TAILLE_MAX or not contenu.startswith(b"%PDF"):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "FICHIER_REFUSE",
+                "motif": "le fichier doit etre un PDF de 8 Mo au plus",
+            },
+        )
+    nom = fichier.filename or "ordonnance.pdf"
+    try:
+        resultat = extraire_ordonnance(contenu, nom)
+    except PdfIllisible:
+        return JSONResponse(
+            status_code=422,
+            content={"code": "PDF_ILLISIBLE", "motif": "le PDF ne peut pas etre lu"},
+        )
+    except LectureRefusee as refus:
+        return JSONResponse(
+            status_code=422,
+            content={"code": refus.code, "motif": refus.motif},
         )
     return JSONResponse(status_code=200, content=resultat)
 

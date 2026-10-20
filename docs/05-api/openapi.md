@@ -8,12 +8,12 @@ FastAPI publie la spécification OpenAPI sur `GET /openapi.json` et une console 
 POST /auth/login
 Content-Type: application/json
 
-{"identifiant": "gestionnaire", "mot_de_passe": "<AUTH_DEMO_PASSWORD>"}
+{"identifiant": "predicare", "mot_de_passe": "predicareAdmin"}
 ```
 
-Réponse `200` : `{"token": "<jeton>", "role": "gestionnaire"}`. Le jeton se passe ensuite en `Authorization: Bearer <jeton>`. Il expire au bout de huit heures.
+Réponse `200` : `{"token": "<jeton>", "role": "administrateur"}`. Le jeton se passe ensuite en `Authorization: Bearer <jeton>`. Il expire au bout de huit heures. L'adresse `predicare@prediccare.mg` est acceptée à la place de l'identifiant.
 
-Les identifiants créés au démarrage sont `prestataire`, `assure`, `gestionnaire` et `administrateur`. Le mot de passe est la variable `AUTH_DEMO_PASSWORD`, pris au premier passage de `migrate`. Le pseudonyme de l'assuré est `AUTH_ASSURE_ID`, une valeur de `clean.assures`, pas un nom. S'il est vide, `GET /me/remboursements` renvoie une liste vide.
+Le seul compte créé par la migration est cet administrateur. Les comptes des autres rôles se créent dans l'écran Utilisateurs, rattachés à un assuré ou à un professionnel quand le rôle l'exige. Sans ce rattachement, `GET /me/remboursements` renvoie une liste vide.
 
 Les routes `POST /admin/reidentify` et `POST /admin/erase` gardent l'en-tête `X-Admin-Key`. Cette clef ouvre aussi `GET` et `PATCH /admin/settings`.
 

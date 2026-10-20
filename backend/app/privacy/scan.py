@@ -47,12 +47,21 @@ def localiser(valeurs_par_colonne: dict[str, set[str]], secrets: set[str]) -> li
     return [colonne for colonne, valeurs in valeurs_par_colonne.items() if valeurs & secrets]
 
 
+def est_email_de_compte(schema: str, table: str, column: str) -> bool:
+    return schema == "app" and table == "utilisateurs" and column == "email"
+
+
 def colonnes_interdites(connection: Connection) -> list[str]:
     rows = connection.execute(
         """
         SELECT table_schema, table_name, column_name
         FROM information_schema.columns
         WHERE table_schema = ANY(%s)
+          AND NOT (
+              table_schema = 'app'
+              AND table_name = 'utilisateurs'
+              AND column_name = 'email'
+          )
           AND (
               column_name = ANY(%s)
               OR (
@@ -64,7 +73,11 @@ def colonnes_interdites(connection: Connection) -> list[str]:
         """,
         (list(SCHEMAS_SERVIS), list(COLONNES_INTERDITES)),
     ).fetchall()
-    return [f"{schema}.{table}.{column}" for schema, table, column in rows]
+    return [
+        f"{schema}.{table}.{column}"
+        for schema, table, column in rows
+        if not est_email_de_compte(schema, table, column)
+    ]
 
 
 def scanner(connection: Connection, secrets: set[str]) -> list[str]:

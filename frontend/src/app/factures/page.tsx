@@ -16,7 +16,9 @@ export default async function Page() {
     <>
       <h1 className="text-3xl font-semibold">{t("factures.titre")}</h1>
       <p className="text-sm text-muted">{t("factures.intro")}</p>
-      {role === "assure" ? null : <FormulaireFacture peutDeposer={peutDeposer} />}
+      {role === "assure" ? null : (
+        <FormulaireFacture peutDeposer={peutDeposer} peutCreerOrdonnance={role === "prestataire"} />
+      )}
       {dossier && dossier.status !== 200 ? <Erreur texte={t("erreurs.generique")} /> : null}
       {dossier && dossier.status === 200 ? (
         <section>

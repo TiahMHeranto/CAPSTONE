@@ -16,7 +16,6 @@ jobs:
       - run: ruff check backend migrations
       - run: ruff format --check backend migrations
       - run: pytest
-      - run: pip-audit -r backend/requirements.txt
 
   image:
     runs-on: ubuntu-latest

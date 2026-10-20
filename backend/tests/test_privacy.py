@@ -7,7 +7,7 @@ from app.privacy.crypto import (
     pseudonyme,
     tranche_age,
 )
-from app.privacy.scan import localiser
+from app.privacy.scan import est_email_de_compte, localiser
 
 
 class _Resultat:
@@ -62,6 +62,12 @@ def test_audit_sans_identite() -> None:
     assert clair["nom"] == "NomSecret"
     assert "NomSecret" not in " ".join(str(valeur) for valeur in connexion.audit)
     assert detail_audit("trouve") == '{"resultat": "trouve"}'
+
+
+def test_email_de_compte_autorise() -> None:
+    assert est_email_de_compte("app", "utilisateurs", "email")
+    assert not est_email_de_compte("clean", "assures", "email")
+    assert not est_email_de_compte("app", "audit_log", "email")
 
 
 def test_scan_localise_une_colonne() -> None:

@@ -11,6 +11,7 @@ from app.services.comptes import (
 
 class _Charge:
     identifiant = "admin"
+    email = "aina@exemple.mg"
     mot_de_passe = "mot-secret"
     role = "assure"
     assure_id = "pseudo-1"
@@ -52,6 +53,10 @@ class _Base:
             return _Lignes([(1,)] if params[0] == "PRE-1" else [])
         if "WHERE identifiant = %s" in requete and "SELECT 1" in requete:
             return _Lignes([(1,)] if any(item[0] == params[0] for item in self.comptes) else [])
+        if "lower(email)" in requete:
+            return _Lignes([(1,)] if any(item[-1] == params[0] for item in self.comptes) else [])
+        if "SELECT email, created_at::text, actif" in requete:
+            return _Lignes([("aina@exemple.mg", "2026-10-16", True)])
         if "INSERT INTO app.utilisateurs" in requete:
             self.comptes.append(params)
             return _Lignes([])
@@ -147,6 +152,8 @@ def test_assure_rattache_puis_profil_sans_cin(monkeypatch) -> None:
     assert "assure_principal_id" not in corps
     assert "numero_cin" not in corps["nom"]
     assert corps["contrat"]["formule"] == "ESSENTIEL"
+    assert corps["email"] == "aina@exemple.mg"
+    assert corps["created_at"] == "2026-10-16"
     factures = factures_de(Principal("compte-assure", "assure", "pseudo-1"))
     assert factures[1]["factures"][0]["facture_id"] == "FAC-1"
     ordonnances = ordonnances_de(Principal("compte-assure", "assure", "pseudo-1"))
@@ -197,12 +204,25 @@ def test_annuaire_assure_affiche_le_nom(monkeypatch) -> None:
     assert "numero_cin" not in personne
 
 
+def test_email_deja_utilise(monkeypatch) -> None:
+    base = _brancher(monkeypatch)
+    charge = _Charge()
+    assert creer("admin", charge)[0] == 201
+    autre = _Charge()
+    autre.identifiant = "autre"
+    statut, corps = creer("admin", autre)
+    assert statut == 409
+    assert corps["code"] == "EMAIL_PRIS"
+    assert len(base.comptes) == 1
+
+
 def test_creation_http_reservee_a_l_admin(client, entete) -> None:
     response = client.post(
         "/admin/utilisateurs",
         headers=entete("gestionnaire"),
         json={
             "identifiant": "nouveau",
+            "email": "nouveau@exemple.mg",
             "mot_de_passe": "mot-secret",
             "role": "gestionnaire",
         },

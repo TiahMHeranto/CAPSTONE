@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     pii_encryption_key: str = "change-me-pii"
     admin_api_key: str = "change-me-admin"
     auth_token_secret: str = "change-me-auth"
-    auth_demo_password: str = "change-me-demo"
-    auth_assure_id: str = ""
     age_reference_year: int = 2026
     retention_identites_years: int = 5
     log_level: str = "INFO"

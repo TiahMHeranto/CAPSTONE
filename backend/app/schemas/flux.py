@@ -11,12 +11,19 @@ class QuestionIn(BaseModel):
 
 
 class LoginIn(BaseModel):
-    identifiant: str = Field(min_length=1, max_length=64)
+    identifiant: str = Field(min_length=1, max_length=200)
     mot_de_passe: str = Field(min_length=1, max_length=200)
+
+
+class MotDePasseIn(BaseModel):
+    actuel: str = Field(min_length=1, max_length=200)
+    nouveau: str = Field(min_length=8, max_length=200)
+    confirmation: str = Field(min_length=8, max_length=200)
 
 
 class UtilisateurIn(BaseModel):
     identifiant: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    email: str = Field(min_length=5, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     mot_de_passe: str = Field(min_length=8, max_length=200)
     role: Literal["prestataire", "assure", "gestionnaire", "administrateur"]
     assure_id: str | None = Field(default=None, max_length=64)

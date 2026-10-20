@@ -1,5 +1,5 @@
 fastapi==0.143.1
-python-multipart==0.0.20
+python-multipart==0.0.32
 starlette==1.8.0
 uvicorn==0.34.0
 pydantic-settings==2.7.1
@@ -11,8 +11,8 @@ pandas==2.2.3
 scikit-learn==1.9.1
 xgboost==2.1.4
 joblib==1.4.2
-pypdf==5.1.0
+pypdf==6.21.1
 pypdfium2==4.30.0
-pillow==11.1.0
+pillow==12.3.0
 pytesseract==0.3.13
 sqlglot==26.33.0
