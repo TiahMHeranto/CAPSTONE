@@ -240,21 +240,30 @@ def ensure_comptes() -> None:
         return
     assure_id = settings.auth_assure_id or None
     comptes = (
-        ("prestataire", "prestataire", None),
-        ("assure", "assure", assure_id),
-        ("gestionnaire", "gestionnaire", None),
-        ("administrateur", "administrateur", None),
+        ("prestataire", "prestataire", None, "prestataire@prediccare.mg"),
+        ("assure", "assure", assure_id, "assure@prediccare.mg"),
+        ("gestionnaire", "gestionnaire", None, "gestionnaire@prediccare.mg"),
+        ("administrateur", "administrateur", None, "administrateur@prediccare.mg"),
     )
     mot = hacher(settings.auth_demo_password)
     with psycopg.connect(settings.psycopg_migrate_url) as connection:
-        for identifiant, role, lien in comptes:
+        for identifiant, role, lien, email in comptes:
             connection.execute(
                 """
-                INSERT INTO app.utilisateurs (identifiant, mot_de_passe_hash, role, assure_id)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO app.utilisateurs
+                    (identifiant, mot_de_passe_hash, role, assure_id, email)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (identifiant) DO NOTHING
                 """,
-                (identifiant, mot, role, lien),
+                (identifiant, mot, role, lien, email),
+            )
+            connection.execute(
+                """
+                UPDATE app.utilisateurs
+                SET email = %s
+                WHERE identifiant = %s AND email IS NULL
+                """,
+                (email, identifiant),
             )
         connection.commit()
     logger.info("comptes verifies n=%s", len(comptes))

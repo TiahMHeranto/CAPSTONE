@@ -5,11 +5,12 @@ from fastapi.responses import JSONResponse
 
 from app.core.auth import exiger
 from app.core.tokens import Principal
-from app.schemas.flux import OrdonnanceIn, UtilisateurIn
+from app.schemas.flux import MotDePasseIn, OrdonnanceIn, UtilisateurIn
 from app.services.comptes import (
     annuaire,
     assures_visibles,
     catalogue,
+    changer_mot_de_passe,
     contrat_de,
     creer,
     creer_ordonnance,
@@ -17,6 +18,7 @@ from app.services.comptes import (
     lister,
     ordonnances_de,
     profil,
+    supprimer,
 )
 
 router = APIRouter()
@@ -28,6 +30,15 @@ def create_user(
     principal: Annotated[Principal, Depends(exiger("administrateur"))],
 ) -> JSONResponse:
     status, body = creer(principal.identifiant, payload)
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.delete("/admin/utilisateurs/{identifiant}")
+def delete_user(
+    identifiant: str,
+    principal: Annotated[Principal, Depends(exiger("administrateur"))],
+) -> JSONResponse:
+    status, body = supprimer(principal.identifiant, identifiant)
     return JSONResponse(status_code=status, content=body)
 
 
@@ -55,6 +66,17 @@ def read_profile(
     ],
 ) -> JSONResponse:
     status, body = profil(principal)
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.post("/me/mot-de-passe")
+def change_password(
+    payload: MotDePasseIn,
+    principal: Annotated[
+        Principal, Depends(exiger("prestataire", "assure", "gestionnaire", "administrateur"))
+    ],
+) -> JSONResponse:
+    status, body = changer_mot_de_passe(principal, payload)
     return JSONResponse(status_code=status, content=body)
 
 

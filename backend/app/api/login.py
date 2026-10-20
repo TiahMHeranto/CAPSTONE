@@ -25,11 +25,14 @@ def login(payload: LoginIn, request: Request) -> JSONResponse:
         with ouvrir() as connection:
             row = connection.execute(
                 """
-                SELECT mot_de_passe_hash, role, assure_id, actif, prestataire_id
+                SELECT identifiant, mot_de_passe_hash, role, assure_id, actif, prestataire_id
                 FROM app.utilisateurs
-                WHERE identifiant = %s
+                WHERE is_deleted = false
+                  AND (identifiant = %s OR lower(email) = lower(%s))
+                ORDER BY (identifiant = %s) DESC
+                LIMIT 1
                 """,
-                (payload.identifiant,),
+                (payload.identifiant, payload.identifiant, payload.identifiant),
             ).fetchone()
     except Exception as exc:
         logger.warning("login erreur=%s", type(exc).__name__)
@@ -37,17 +40,17 @@ def login(payload: LoginIn, request: Request) -> JSONResponse:
             status_code=503,
             content={"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"},
         )
-    stocke = _LEURRE if row is None else row[0]
-    if row is None or not row[3] or not verifier(payload.mot_de_passe, stocke):
+    stocke = _LEURRE if row is None else row[1]
+    if row is None or not row[4] or not verifier(payload.mot_de_passe, stocke):
         return JSONResponse(
             status_code=401,
             content={"code": "IDENTIFIANTS_INVALIDES", "motif": "identifiants refuses"},
         )
-    prestataire = row[4] if len(row) > 4 else None
+    prestataire = row[5] if len(row) > 5 else None
     return JSONResponse(
         status_code=200,
         content={
-            "token": emettre(payload.identifiant, row[1], row[2], prestataire_id=prestataire),
-            "role": row[1],
+            "token": emettre(row[0], row[2], row[3], prestataire_id=prestataire),
+            "role": row[2],
         },
     )

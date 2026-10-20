@@ -8,7 +8,7 @@ import psycopg
 from cryptography.fernet import InvalidToken
 
 from app.config import settings
-from app.core.tokens import ROLES, Principal, hacher
+from app.core.tokens import ROLES, Principal, hacher, verifier
 from app.db.session import ouvrir
 from app.privacy.crypto import coffre_fernet, dechiffrer
 from app.services.referentiel import lire_codes, lister_catalogue
@@ -33,6 +33,9 @@ def creer(acteur: str, payload) -> tuple[int, dict]:
             return 422, {"code": "LIEN_REQUIS", "motif": "un professionnel exige son etablissement"}
     elif assure_id or prestataire_id:
         return 422, {"code": "LIEN_REFUSE", "motif": "ce role n'est pas rattache a une personne"}
+    email = _email(getattr(payload, "email", None))
+    if email is None:
+        return 422, {"code": "EMAIL_INVALIDE", "motif": "adresse e-mail invalide"}
     try:
         with ouvrir() as connection:
             if role == _LIEN_ASSURE and not _existe(
@@ -49,11 +52,20 @@ def creer(acteur: str, payload) -> tuple[int, dict]:
             ).fetchone()
             if deja:
                 return 409, {"code": "IDENTIFIANT_PRIS", "motif": "cet identifiant existe deja"}
+            pris = connection.execute(
+                """
+                SELECT 1 FROM app.utilisateurs
+                WHERE lower(email) = lower(%s) AND is_deleted = false
+                """,
+                (email,),
+            ).fetchone()
+            if pris:
+                return 409, {"code": "EMAIL_PRIS", "motif": "cette adresse existe deja"}
             connection.execute(
                 """
                 INSERT INTO app.utilisateurs
-                    (identifiant, mot_de_passe_hash, role, assure_id, prestataire_id)
-                VALUES (%s, %s, %s, %s, %s)
+                    (identifiant, mot_de_passe_hash, role, assure_id, prestataire_id, email)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 (
                     payload.identifiant,
@@ -61,6 +73,7 @@ def creer(acteur: str, payload) -> tuple[int, dict]:
                     role,
                     assure_id,
                     prestataire_id,
+                    email,
                 ),
             )
             _auditer(connection, acteur, payload.identifiant, role)
@@ -76,8 +89,9 @@ def lister() -> tuple[int, dict]:
         with ouvrir() as connection:
             rows = connection.execute(
                 """
-                SELECT identifiant, role, assure_id, prestataire_id, actif
+                SELECT identifiant, role, email, assure_id, prestataire_id, actif, created_at::text
                 FROM app.utilisateurs
+                WHERE is_deleted = false
                 ORDER BY identifiant
                 """
             ).fetchall()
@@ -89,13 +103,45 @@ def lister() -> tuple[int, dict]:
             {
                 "identifiant": row[0],
                 "role": row[1],
-                "assure_id": row[2],
-                "prestataire_id": row[3],
-                "actif": row[4],
+                "email": row[2],
+                "assure_id": row[3],
+                "prestataire_id": row[4],
+                "actif": row[5],
+                "created_at": row[6],
             }
             for row in rows
         ]
     }
+
+
+def supprimer(acteur: str, identifiant: str) -> tuple[int, dict]:
+    if acteur == identifiant:
+        return 422, {"code": "SUPPRESSION_REFUSEE", "motif": "un compte ne se retire pas lui-meme"}
+    try:
+        with ouvrir() as connection:
+            row = connection.execute(
+                """
+                UPDATE app.utilisateurs
+                SET is_deleted = true, actif = false
+                WHERE identifiant = %s AND is_deleted = false
+                RETURNING identifiant
+                """,
+                (identifiant,),
+            ).fetchone()
+            if row is None:
+                return 404, {"code": "COMPTE_ABSENT", "motif": "compte introuvable"}
+            connection.execute(
+                """
+                INSERT INTO app.audit_log (acteur, action, entite, entite_id, detail)
+                VALUES (%s, 'suppression_compte', 'utilisateur', %s, '{}'::jsonb)
+                """,
+                (acteur, identifiant),
+            )
+            connection.commit()
+    except psycopg.Error as exc:
+        logger.warning("suppression compte erreur=%s", type(exc).__name__)
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+    return 200, {"identifiant": identifiant, "is_deleted": True}
 
 
 def annuaire(cible: str) -> tuple[int, dict]:
@@ -114,14 +160,62 @@ def annuaire(cible: str) -> tuple[int, dict]:
 def profil(principal: Principal) -> tuple[int, dict]:
     try:
         with ouvrir() as connection:
+            compte = _fiche_compte(connection, principal.identifiant)
+            if compte is None:
+                return 404, {"code": "COMPTE_ABSENT", "motif": "compte introuvable"}
             if principal.role == _LIEN_ASSURE:
-                return 200, _profil_assure(connection, principal)
-            if principal.role == _LIEN_PRESTATAIRE:
-                return 200, _profil_prestataire(connection, principal)
+                corps = _profil_assure(connection, principal)
+            elif principal.role == _LIEN_PRESTATAIRE:
+                corps = _profil_prestataire(connection, principal)
+            else:
+                corps = {"identifiant": principal.identifiant, "role": principal.role, "lien": None}
+            corps.update(compte)
+            return 200, corps
     except psycopg.Error as exc:
         logger.warning("profil erreur=%s", type(exc).__name__)
         return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
-    return 200, {"identifiant": principal.identifiant, "role": principal.role, "lien": None}
+
+
+def changer_mot_de_passe(principal: Principal, payload) -> tuple[int, dict]:
+    if payload.nouveau != payload.confirmation:
+        return 422, {"code": "MOT_DIFFERENT", "motif": "la confirmation ne correspond pas"}
+    try:
+        with ouvrir() as connection:
+            row = connection.execute(
+                """
+                SELECT mot_de_passe_hash
+                FROM app.utilisateurs
+                WHERE identifiant = %s AND is_deleted = false AND actif = true
+                """,
+                (principal.identifiant,),
+            ).fetchone()
+            if row is None or not verifier(payload.actuel, row[0]):
+                return 422, {"code": "MOT_ACTUEL_REFUSE", "motif": "mot de passe actuel refuse"}
+            if verifier(payload.nouveau, row[0]):
+                return 422, {
+                    "code": "MOT_IDENTIQUE",
+                    "motif": "le nouveau mot de passe est identique",
+                }
+            connection.execute(
+                """
+                UPDATE app.utilisateurs
+                SET mot_de_passe_hash = %s
+                WHERE identifiant = %s AND is_deleted = false AND actif = true
+                """,
+                (hacher(payload.nouveau), principal.identifiant),
+            )
+            connection.execute(
+                """
+                INSERT INTO app.audit_log (acteur, action, entite, entite_id, detail)
+                VALUES (%s, 'changement_mot_de_passe', 'utilisateur', %s, '{}'::jsonb)
+                """,
+                (principal.identifiant, principal.identifiant),
+            )
+            connection.commit()
+    except psycopg.Error as exc:
+        logger.warning("mot de passe erreur=%s", type(exc).__name__)
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+    return 200, {"identifiant": principal.identifiant}
 
 
 def contrat_de(principal: Principal) -> tuple[int, dict]:
@@ -490,6 +584,27 @@ def _auditer(connection, acteur: str, identifiant: str, role: str) -> None:
         """,
         (acteur, identifiant, json.dumps({"role": role})),
     )
+
+
+def _fiche_compte(connection, identifiant: str) -> dict | None:
+    row = connection.execute(
+        """
+        SELECT email, created_at::text, actif
+        FROM app.utilisateurs
+        WHERE identifiant = %s AND is_deleted = false
+        """,
+        (identifiant,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {"email": row[0], "created_at": row[1], "actif": row[2]}
+
+
+def _email(valeur: str | None) -> str | None:
+    propre = _vide(valeur)
+    if propre is None or "@" not in propre or " " in propre:
+        return None
+    return propre.lower()
 
 
 def _vide(valeur: str | None) -> str | None:
