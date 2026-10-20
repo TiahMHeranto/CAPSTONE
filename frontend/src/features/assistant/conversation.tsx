@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Button, Champ } from "@/components/ui";
 import { demander } from "@/features/assistant/api";
@@ -132,7 +133,8 @@ export function Conversation({
     const date = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     return (
       <div className="flex h-full min-h-0 flex-col bg-surface text-foreground">
-        <div className="flex gap-1 border-b border-border px-3 py-2" role="tablist">
+        <div className="flex gap-1 border-b border-border px-3 py-2">
+          <div className="flex gap-1" role="tablist">
           <button
             type="button"
             role="tab"
@@ -153,6 +155,10 @@ export function Conversation({
             <IconeLivre />
             {t("assistant.ongletBase")}
           </button>
+          </div>
+          <Link className="ml-auto inline-flex min-h-11 items-center px-2 text-sm text-muted" href="/assistant">
+            {t("assistant.page")}
+          </Link>
         </div>
         {onglet === "base" ? (
           <div className="flex-1 space-y-2 overflow-y-auto p-4">

@@ -1,5 +1,10 @@
-import { Conversation } from "@/features/assistant/conversation";
+import { Suspense } from "react";
+import { Salon } from "@/features/assistant/salon";
 
 export default function Page() {
-  return <Conversation />;
+  return (
+    <Suspense fallback={null}>
+      <Salon />
+    </Suspense>
+  );
 }

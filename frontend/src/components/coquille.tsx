@@ -28,14 +28,14 @@ export function Coquille({
   const espace = espaceDe(session.role);
   const liens = LIENS.filter((lien) => lien.roles.includes(session.role));
   return (
-    <div className="bureau flex min-h-dvh flex-col bg-background md:flex-row">
+    <div className="bureau flex min-h-dvh flex-col bg-background md:h-dvh md:flex-row md:overflow-hidden">
       <a className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:bg-surface focus:p-2" href="#contenu">
         {t("passer")}
       </a>
       <BureauNav liens={liens} session={session} nom={nom} alertes={alertes} espace={espace} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:h-dvh">
         <EnteteBureau liens={liens} sombre={theme === "dark"} espace={espace} />
-        <main id="contenu" className="w-full flex-1 space-y-4 px-6 pb-10">
+        <main id="contenu" className="relative flex w-full min-h-0 flex-1 flex-col space-y-4 px-6 pb-10 md:overflow-auto">
           {children}
         </main>
         <AssistantFlottant />

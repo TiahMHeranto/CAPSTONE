@@ -24,7 +24,7 @@ export function BureauNav({
   const chemin = usePathname();
   const libelle = nom || session.identifiant;
   return (
-    <aside className="flex flex-col bg-[#121a2b] px-4 py-5 text-white md:sticky md:top-0 md:h-dvh md:w-[260px]">
+    <aside className="flex flex-col bg-[#121a2b] px-4 py-5 text-white md:sticky md:top-0 md:h-dvh md:w-[260px] md:overflow-y-auto">
       <Link className="mb-6 flex items-center gap-3 px-1" href="/tableau">
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10">
           <Pouls className="h-4 w-7" />
