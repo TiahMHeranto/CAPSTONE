@@ -38,7 +38,7 @@ export function Coquille({
         <main id="contenu" className="relative flex w-full min-h-0 flex-1 flex-col space-y-4 px-6 pb-10 md:overflow-auto">
           {children}
         </main>
-        <AssistantFlottant />
+        <AssistantFlottant identifiant={session.identifiant} />
       </div>
     </div>
   );

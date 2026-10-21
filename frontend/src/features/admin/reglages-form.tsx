@@ -5,6 +5,26 @@ import { Button, Champ, Etiquette } from "@/components/ui";
 import { deposerCorpus, etatCorpus, majAssistant, sauverReglages } from "@/features/admin/api";
 import { messageErreur, t } from "@/i18n/traduire";
 
+const CANAUX = ["webhook", "email", "slack"] as const;
+const VERSIONS = ["v1", "v2", "v3"] as const;
+
+const liste =
+  "min-h-11 w-full rounded-md border border-border bg-surface px-3 text-foreground";
+
+function canalInitial(canaux: string): string {
+  const choisi = canaux
+    .split(",")
+    .map((item) => item.trim())
+    .find((item) => item === "webhook" || item === "email" || item === "slack");
+  return choisi ?? "webhook";
+}
+
+const LIBELLES_CANAL = {
+  webhook: "admin.canalWebhook",
+  email: "admin.canalEmail",
+  slack: "admin.canalSlack",
+} as const;
+
 export function ReglagesForm({
   seuil,
   canaux,
@@ -25,13 +45,21 @@ export function ReglagesForm({
   const [confirme, setConfirme] = useState(false);
   const [message, setMessage] = useState("");
   const [maj, setMaj] = useState(statutCorpus);
+  const [chemin, setChemin] = useState(corpus);
   const choix = useRef<HTMLInputElement>(null);
+
+  function noterChemin(data: Record<string, unknown>) {
+    if (typeof data.chemin === "string" && data.chemin) setChemin(data.chemin);
+  }
 
   useEffect(() => {
     if (maj !== "en_cours") return;
     const timer = window.setInterval(async () => {
       const recu = await etatCorpus();
-      if (recu.status === 200) setMaj(String(recu.data.statut ?? ""));
+      if (recu.status === 200) {
+        setMaj(String(recu.data.statut ?? ""));
+        noterChemin(recu.data);
+      }
     }, 4000);
     return () => window.clearInterval(timer);
   }, [maj]);
@@ -49,10 +77,7 @@ export function ReglagesForm({
         }
         const recu = await sauverReglages({
           alert_threshold: Number(data.get("seuil")),
-          notification_channels: String(data.get("canaux") ?? "")
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
+          notification_channels: [String(data.get("canaux") ?? "")].filter(Boolean),
           active_model_version: String(data.get("version") ?? ""),
           drift_psi_threshold: Number(data.get("derive")),
           n8n_webhook_url: String(data.get("webhook") ?? ""),
@@ -67,11 +92,23 @@ export function ReglagesForm({
       </label>
       <label>
         <Etiquette>{t("admin.canaux")}</Etiquette>
-        <Champ name="canaux" defaultValue={canaux} />
+        <select className={liste} name="canaux" defaultValue={canalInitial(canaux)}>
+          {CANAUX.map((canal) => (
+            <option key={canal} value={canal}>
+              {t(LIBELLES_CANAL[canal])}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         <Etiquette>{t("admin.version")}</Etiquette>
-        <Champ name="version" defaultValue={version} />
+        <select className={liste} name="version" defaultValue={version || "v2"}>
+          {VERSIONS.map((item) => (
+            <option key={item} value={item}>
+              {t(`admin.modele${item.toUpperCase()}Label`)}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         <Etiquette>{t("admin.derive")}</Etiquette>
@@ -87,7 +124,7 @@ export function ReglagesForm({
           <Button variante="secondary" type="button" onClick={() => choix.current?.click()}>
             {t("admin.parcourir")}
           </Button>
-          <span className="text-sm text-muted">{corpus}</span>
+          <span className="font-mono text-sm">{chemin}</span>
         </div>
         <input
           ref={choix}
@@ -112,6 +149,7 @@ export function ReglagesForm({
             }
             const recu = await deposerCorpus(formData);
             if (recu.status === 202) {
+              noterChemin(recu.data);
               setMaj("en_cours");
               setMessage(t("admin.majLancee"));
               return;
@@ -129,6 +167,7 @@ export function ReglagesForm({
         onClick={async () => {
           const recu = await majAssistant();
           if (recu.status === 202) {
+            noterChemin(recu.data);
             setMaj("en_cours");
             setMessage(t("admin.majLancee"));
             return;

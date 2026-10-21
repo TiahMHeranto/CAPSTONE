@@ -1,6 +1,6 @@
 # Fiche du workflow OCR
 
-Le fichier importable est `n8n/workflows/ocr.json`. Il reprend la chaîne « dépôt, lecture, extraction, découpage », avec un webhook à la place d'un dossier Drive. Le modèle est Gemma 4 (`LLM_MODEL`), appelé avec la clef Google AI Studio.
+Le fichier importable est `n8n/workflows/ocr.json`. Il reprend la chaîne « dépôt, lecture, extraction, découpage », avec un webhook à la place d'un dossier Drive. Le modèle est Gemma 4 (`LLM_MODEL`), appelé avec la clef Google AI Studio. Si cet appel échoue, le même nœud interroge `llama3.2` sur l'Ollama de la machine (`OLLAMA_URL`).
 
 ## Déclencheur
 

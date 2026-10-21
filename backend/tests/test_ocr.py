@@ -103,7 +103,8 @@ def test_workflow_recoit_un_fichier_et_appelle_le_modele() -> None:
     assert "generativelanguage.googleapis.com" in texte
     assert ":generateContent" in texte
     assert "gemma-4-26b-a4b-it" in texte
-    assert "ollama" not in texte.lower()
+    assert "llama3.2" in texte
+    assert "/api/chat" in texte
     regrouper = (RACINE / "n8n" / "workflows" / "ocr-regrouper.js").read_text(encoding="utf-8")
     code = next(
         noeud["parameters"]["jsCode"]

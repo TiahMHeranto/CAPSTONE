@@ -21,7 +21,7 @@ function IconeFermer() {
   );
 }
 
-export function AssistantFlottant() {
+export function AssistantFlottant({ identifiant }: { identifiant: string }) {
   const chemin = usePathname();
   const [ouvert, setOuvert] = useState(false);
   const [monte, setMonte] = useState(false);
@@ -85,7 +85,7 @@ export function AssistantFlottant() {
           className={`${ouvert ? "flex" : "hidden"} h-[min(36rem,calc(100dvh-6.5rem))] w-[min(24rem,calc(100vw-2rem))] shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-xl`}
         >
           <Suspense fallback={null}>
-            <Salon variant="widget" visible={ouvert} questionDemandee={demande} />
+            <Salon identifiant={identifiant} variant="widget" visible={ouvert} questionDemandee={demande} />
           </Suspense>
         </section>
       ) : null}

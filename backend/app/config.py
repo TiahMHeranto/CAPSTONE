@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     llm_embed_api_key: str = ""
     llm_embed_model: str = "gemini-embedding-001"
     llm_embed_dimensions: int = 768
+    ollama_url: str = "http://host.docker.internal:11434"
+    ollama_model: str = "llama3.2"
+    ollama_embed_model: str = "nomic-embed-text"
     rag_dir: str = "/corpus"
     rag_index_au_demarrage: bool = True
     assistant_cache_similarite: float = 0.92

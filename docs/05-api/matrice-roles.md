@@ -25,8 +25,9 @@
 | `GET /alerts/prescriptions` | | | oui | oui |
 | `POST /alerts/journal` | | | | oui |
 | `GET /alerts/journal` | | | oui | oui |
-| `POST /invoices/{id}/decisions` | | | oui | |
+| `POST /invoices/{id}/decisions` | | | oui | oui |
 | `GET /me/remboursements` | | les siens | | |
+| `GET /remboursements` | | | tous | tous |
 | `POST /admin/utilisateurs`, `GET /admin/utilisateurs`, `GET /admin/annuaire` | | | | oui |
 | `GET /me/profil` | le sien | le sien | le sien | le sien |
 | `GET /me/contrat`, `GET /me/factures`, `GET /me/ordonnances` | son établissement, ou les ordonnances d'un assuré choisi | son dossier | | |

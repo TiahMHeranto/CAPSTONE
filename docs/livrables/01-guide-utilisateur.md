@@ -35,7 +35,7 @@ L'assistant répond aux questions sur les garanties et les remboursements, avec 
 Parcours : suivre ses remboursements et poser une question.
 
 1. Le tableau de bord résume le contrat et les factures rattachées au compte.
-2. Remboursements liste les factures de ce seul assuré : identifiant, statut, montant, date de soin.
+2. Remboursements liste les factures de ce seul assuré : identifiant, statut, montant de la facture, montant pris en charge, reste à charge et motif de rejet.
 3. L'assistant sert à suivre un remboursement ou à lire un barème. Une question hors de ce périmètre est refusée.
 
 L'assuré ne dépose pas de facture et ne voit pas les alertes des autres dossiers.
@@ -46,9 +46,10 @@ Parcours : traiter les alertes, trancher, suivre l'activité.
 
 1. Alertes ouvre la file des scores en alerte encore sans décision.
 2. Ouvrir la facture et le rapport d'explications. Si la facture cite une ordonnance, les anomalies de prescription (doublon, péremption, quantité, ligne absente, spécialité hors diagnostic) apparaissent à côté du score. Le texte du diagnostic n'est pas affiché.
-3. Trancher : valider, rejeter avec un motif, ou demander un complément. La décision est enregistrée. La facture sort de la file.
-4. Le score ne rejette pas la facture à la place du gestionnaire.
-5. Pilotage affiche les volumes, les alertes, les décisions, la répartition des scores, le montant des rejets confirmés et le taux de détection.
+3. Trancher : valider, rejeter, ou demander un complément. Le motif se choisit dans une liste. Après validation ou rejet, l'écran affiche une confirmation. La validation calcule le montant pris en charge selon le taux, la franchise et le plafond de la formule. Un rejet ne verse rien. La facture sort de la file d'alertes.
+4. Remboursements reprend toutes les factures, avec le montant pris en charge et le reste à charge.
+5. Le score ne rejette pas la facture à la place du gestionnaire.
+6. Pilotage affiche les volumes, les alertes, les décisions, la répartition des scores, le montant des rejets confirmés et le taux de détection.
 
 Le gestionnaire peut aussi déposer une facture. S'il confirme une ordonnance lue sur un PDF, la référence est reportée sur la facture ; la création de l'ordonnance reste au professionnel.
 
@@ -69,4 +70,4 @@ Le seuil d'exemple 0,8 du cahier n'est pas une constante du score. La valeur qui
 
 ## Ce que l'écran ne fait pas
 
-Pas de second facteur. Pas d'export du tableau de bord. Une décision humaine ne prévient pas l'assuré ni le professionnel. Le canal de notification effectif, tant que les adresses Slack et e-mail ne sont pas renseignées, est le journal interne des alertes.
+Pas de second facteur. Pas d'export du tableau de bord. L'assuré voit le résultat sur Remboursements ; il ne reçoit pas de message séparé. Le canal de notification effectif, tant que les adresses Slack et e-mail ne sont pas renseignées, est le journal interne des alertes.

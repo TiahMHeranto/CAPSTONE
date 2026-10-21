@@ -1,6 +1,7 @@
 """Registre des modèles livrés par le membre 1.
 
-v1 et v2 sont des pipelines XGBoost à 23 variables. Le score lit
+v1, v2 et v3 sont des pipelines XGBoost à 23 variables, même schéma,
+seuil de rappel différent (prudent, recommandé, maximal). Le score lit
 `models/<version>/model.joblib`. Il n'y a pas de score simulé.
 """
 

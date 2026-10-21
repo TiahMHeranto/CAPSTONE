@@ -16,9 +16,25 @@ type Personne = {
   type?: string;
 };
 
+function textesErreur(data: Record<string, unknown>): string[] {
+  const rejets = data.rejets;
+  if (Array.isArray(rejets) && rejets.length > 0) {
+    return rejets.map((item) => {
+      if (!item || typeof item !== "object") return t("erreurs.generique");
+      const code = String((item as { code?: string }).code ?? "");
+      const traduit = t(`erreurs.${code}`);
+      if (code && traduit !== `erreurs.${code}`) return traduit;
+      const motif = String((item as { motif?: string }).motif ?? "");
+      return motif || t("erreurs.generique");
+    });
+  }
+  return [messageErreur(data)];
+}
+
 export function CompteForm() {
   const router = useRouter();
-  const [message, setMessage] = useState("");
+  const [succes, setSucces] = useState("");
+  const [erreurs, setErreurs] = useState<string[]>([]);
   const [role, setRole] = useState("");
   const [personnes, setPersonnes] = useState<Personne[]>([]);
 
@@ -44,6 +60,8 @@ export function CompteForm() {
       className="mt-6 grid gap-3 md:grid-cols-2"
       onSubmit={async (event) => {
         event.preventDefault();
+        setSucces("");
+        setErreurs([]);
         const form = event.currentTarget;
         const data = new FormData(form);
         const choisi = String(data.get("role") ?? "");
@@ -56,11 +74,11 @@ export function CompteForm() {
           prestataire_id: choisi === "prestataire" ? String(data.get("personne") ?? "") : null,
         });
         if (recu.status === 201 || recu.status === 200) {
-          setMessage(t("admin.compteCree"));
+          setSucces(t("admin.compteCree"));
           form.reset();
           setRole("");
           router.refresh();
-        } else setMessage(messageErreur(recu.data));
+        } else setErreurs(textesErreur(recu.data));
       }}
     >
       <h2 className="text-xl md:col-span-2">{t("admin.creer")}</h2>
@@ -118,9 +136,18 @@ export function CompteForm() {
           {personnes.length === 0 ? <p className="mt-1 text-sm text-muted">{t("admin.aucunePersonne")}</p> : null}
         </label>
       ) : null}
-      {message ? (
+      {erreurs.length > 0 ? (
+        <div className="rounded-md bg-danger-bg p-4 text-danger md:col-span-2" role="alert">
+          <ul className="space-y-1">
+            {erreurs.map((texte, index) => (
+              <li key={`${texte}-${index}`}>{texte}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {succes ? (
         <p className="md:col-span-2" role="status">
-          {message}
+          {succes}
         </p>
       ) : null}
       <Button type="submit">{t("admin.creer")}</Button>
