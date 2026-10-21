@@ -91,10 +91,12 @@ function bip() {
 }
 
 export function Salon({
+  identifiant,
   variant = "page",
   visible = true,
   questionDemandee = null,
 }: {
+  identifiant: string;
   variant?: "page" | "widget";
   visible?: boolean;
   questionDemandee?: { id: number; texte: string } | null;
@@ -138,6 +140,7 @@ export function Salon({
   const ticket = useRef(0);
   const departTouche = useRef(0);
   const demarre = useRef(false);
+  const identifiantCharge = useRef("");
   const fileEnCours = useRef(new Set<string>());
 
   const fil = fils.find((item) => item.id === actif) ?? null;
@@ -150,9 +153,10 @@ export function Salon({
     .sort((a, b) => Number(b.epingle) - Number(a.epingle) || b.maj - a.maj);
 
   useEffect(() => {
-    if (demarre.current) return;
+    if (demarre.current && identifiantCharge.current === identifiant) return;
     demarre.current = true;
-    const charges = lireFils();
+    identifiantCharge.current = identifiant;
+    const charges = lireFils(identifiant);
     const demande = params.get("c");
     const trouve = charges.find((item) => item.id === demande);
     if (demande && !trouve) {
@@ -165,17 +169,17 @@ export function Salon({
     const liste = charges.some((item) => item.id === choisi.id) ? charges : [choisi, ...charges];
     setFils(liste);
     setActif(choisi.id);
-    setQuestion(lireBrouillon(choisi.id));
+    setQuestion(lireBrouillon(identifiant, choisi.id));
     setSon(lireSon());
     setLigne(navigator.onLine);
     if (!widget && params.get("c") !== choisi.id) router.replace(`/assistant?c=${choisi.id}`);
     setPret(true);
     if (visible) saisie.current?.focus();
-  }, [params, router, widget, visible]);
+  }, [params, router, widget, visible, identifiant]);
 
   useEffect(() => {
-    if (pret) ecrireFils(fils);
-  }, [fils, pret]);
+    if (pret) ecrireFils(identifiant, fils);
+  }, [fils, pret, identifiant]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setFiltre(recherche.trim().toLowerCase()), 200);
@@ -184,9 +188,9 @@ export function Salon({
 
   useEffect(() => {
     if (!pret || !actif) return;
-    const timer = window.setTimeout(() => ecrireBrouillon(actif, question), 300);
+    const timer = window.setTimeout(() => ecrireBrouillon(identifiant, actif, question), 300);
     return () => window.clearTimeout(timer);
-  }, [question, actif, pret]);
+  }, [question, actif, pret, identifiant]);
 
   useEffect(() => {
     function maj() {
@@ -249,7 +253,7 @@ export function Salon({
 
   function ouvrir(id: string) {
     setActif(id);
-    setQuestion(lireBrouillon(id));
+    setQuestion(lireBrouillon(identifiant, id));
     setManquant(false);
     setMenu(false);
     setDebut(0);
@@ -364,7 +368,7 @@ export function Salon({
     });
     setFichiers([]);
     setQuestion("");
-    ecrireBrouillon(actif, "");
+    ecrireBrouillon(identifiant, actif, "");
     const utilisateur = messageVide("user", texte);
     utilisateur.etat = navigator.onLine ? "envoi" : "file";
     utilisateur.pieces = pieces;

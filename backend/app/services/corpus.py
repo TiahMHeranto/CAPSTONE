@@ -15,7 +15,9 @@ _etat = {"statut": "repos", "fragments": 0, "message": ""}
 
 def etat() -> dict:
     with _verrou:
-        return dict(_etat)
+        courant = dict(_etat)
+    courant["chemin"] = str(chemin_corpus())
+    return courant
 
 
 def chemin_corpus() -> Path:
@@ -49,8 +51,8 @@ def destination(dossier: Path, relatif: str) -> Path | None:
 
 
 def deposer(morceaux: list[tuple[str, bytes]]) -> tuple[int, dict]:
-    dossier = chemin_corpus()
-    if not dossier.is_dir():
+    racine = Path(settings.rag_dir)
+    if not racine.is_dir():
         return 422, {
             "valide": False,
             "rejets": [{"code": "CORPUS_ABSENT", "motif": "dossier du corpus introuvable"}],
@@ -61,28 +63,63 @@ def deposer(morceaux: list[tuple[str, bytes]]) -> tuple[int, dict]:
                 "code": "INDEXATION_EN_COURS",
                 "motif": "une mise a jour du corpus est deja en cours",
             }
-    ecrits = 0
+    ecrits: list[Path] = []
     try:
         for relatif, contenu in morceaux:
-            cible = destination(dossier, relatif)
+            cible = destination(racine, relatif)
             if cible is None or len(contenu) > 20 * 1024 * 1024:
                 continue
             cible.parent.mkdir(parents=True, exist_ok=True)
             cible.write_bytes(contenu)
-            ecrits += 1
+            ecrits.append(cible)
     except OSError:
         logger.warning("ecriture du corpus refusee")
         return 422, {
             "valide": False,
             "rejets": [{"code": "CORPUS_ABSENT", "motif": "dossier du corpus non modifiable"}],
         }
-    if ecrits == 0:
+    if not ecrits:
         return 422, {
             "valide": False,
             "rejets": [{"code": "FICHIER_INVALIDE", "motif": "aucun pdf retenu"}],
         }
-    logger.info("pdf deposes compte=%s", ecrits)
+    actif = _dossier_indexe(racine, ecrits)
+    try:
+        _retenir(actif)
+    except Exception:
+        logger.warning("chemin du corpus non enregistre")
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+    logger.info("pdf deposes compte=%s chemin=%s", len(ecrits), actif)
     return lancer()
+
+
+def _dossier_indexe(racine: Path, ecrits: list[Path]) -> Path:
+    relatifs = []
+    for cible in ecrits:
+        try:
+            relatifs.append(cible.resolve().relative_to(racine.resolve()))
+        except ValueError:
+            return racine
+    if not relatifs:
+        return racine
+    premier = relatifs[0].parts[0] if len(relatifs[0].parts) > 1 else ""
+    if premier and all(len(relatif.parts) > 1 and relatif.parts[0] == premier for relatif in relatifs):
+        return racine / premier
+    return racine
+
+
+def _retenir(chemin: Path) -> None:
+    with ouvrir() as connection:
+        connection.execute(
+            """
+            INSERT INTO app.settings (key, value, updated_at)
+            VALUES ('rag_corpus_path', %s, now())
+            ON CONFLICT (key) DO UPDATE
+                SET value = EXCLUDED.value, updated_at = now()
+            """,
+            (str(chemin),),
+        )
+        connection.commit()
 
 
 def lancer() -> tuple[int, dict]:

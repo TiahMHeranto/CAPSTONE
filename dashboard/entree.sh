@@ -14,4 +14,5 @@ fi
 
 superset init
 python /app/pythonpath/brancher_bi.py
+python /app/pythonpath/creer_tableau.py
 exec /usr/bin/run-server.sh

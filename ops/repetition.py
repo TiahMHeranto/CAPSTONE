@@ -129,14 +129,24 @@ def main() -> int:
     verifier("prestataire reglages", appel("GET", "/admin/settings", "prestataire")[0] == 403)
     verifier("gestionnaire remboursements", appel("GET", "/me/remboursements", "gestionnaire")[0] == 403)
     verifier(
-        "administrateur decide",
+        "prestataire decide",
+        appel(
+            "POST",
+            "/invoices/FAC-INCONNUE/decisions",
+            "prestataire",
+            {"decision": "valider", "motif": "hors role"},
+        )[0]
+        == 403,
+    )
+    verifier(
+        "administrateur facture inconnue",
         appel(
             "POST",
             "/invoices/FAC-INCONNUE/decisions",
             "administrateur",
-            {"decision": "valider", "motif": "hors role"},
+            {"decision": "valider", "motif": "pieces conformes"},
         )[0]
-        == 403,
+        == 404,
     )
 
     with psycopg.connect(settings.psycopg_database_url) as connexion:

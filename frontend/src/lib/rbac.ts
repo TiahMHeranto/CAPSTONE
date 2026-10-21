@@ -10,7 +10,7 @@ export const LIENS: Lien[] = [
   { href: "/tableau", cle: "nav.tableau", roles: TOUS },
   { href: "/factures", cle: "nav.factures", roles: PRO.concat("assure") },
   { href: "/alertes", cle: "nav.alertes", roles: GESTION },
-  { href: "/remboursements", cle: "nav.remboursements", roles: ["assure"] },
+  { href: "/remboursements", cle: "nav.remboursements", roles: ["assure", "gestionnaire", "administrateur"] },
   { href: "/assistant", cle: "nav.assistant", roles: TOUS },
   { href: "/pilotage", cle: "nav.pilotage", roles: GESTION },
   { href: "/supervision", cle: "nav.supervision", roles: ["administrateur"] },

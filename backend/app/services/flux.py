@@ -20,6 +20,7 @@ from app.services.prescriptions import lister as lire_anomalies
 from app.services.referentiel import lire_codes
 from app.services.registry import ModeleIndisponible
 from app.services.reglages import appliquer, lire, normaliser, vue
+from app.services.remboursement import montants as calculer_remboursement
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,7 @@ def decider(facture_id: str, decision: str, motif: str, acteur: str) -> tuple[in
             ).fetchone()
             prediction_id = None if prediction is None else int(prediction[0])
             statut = STATUTS[decision]
+            pris, reste = calculer_remboursement(connection, facture_id, decision)
             connection.execute(
                 """
                 INSERT INTO app.decisions
@@ -182,10 +184,11 @@ def decider(facture_id: str, decision: str, motif: str, acteur: str) -> tuple[in
             connection.execute(
                 """
                 UPDATE app.factures
-                SET statut = %s, motif_rejet = %s, date_traitement = CURRENT_DATE
+                SET statut = %s, motif_rejet = %s, date_traitement = CURRENT_DATE,
+                    montant_pris_en_charge = %s, reste_a_charge = %s
                 WHERE facture_id = %s
                 """,
-                (statut, motif if decision == "rejeter" else None, facture_id),
+                (statut, motif if decision == "rejeter" else None, pris, reste, facture_id),
             )
             auditer(
                 connection,
@@ -199,7 +202,14 @@ def decider(facture_id: str, decision: str, motif: str, acteur: str) -> tuple[in
     except psycopg.Error as exc:
         logger.warning("decision erreur=%s", type(exc).__name__)
         return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
-    return 200, {"facture_id": facture_id, "decision": decision, "statut": statut}
+    return 200, {
+        "facture_id": facture_id,
+        "decision": decision,
+        "statut": statut,
+        "motif": motif,
+        "montant_pris_en_charge": pris,
+        "reste_a_charge": reste,
+    }
 
 
 def consulter_facture(facture_id: str, principal: Principal) -> tuple[int, dict]:
@@ -256,13 +266,66 @@ def consulter_prediction(facture_id: str, principal: Principal) -> tuple[int, di
     }
 
 
+def lister_factures(limite: int = 200) -> tuple[int, dict]:
+    """Vue complète pour le gestionnaire et l'administrateur : statut, score,
+
+    classe d'alerte et décision humaine de chaque facture déposée.
+    """
+    try:
+        with ouvrir() as connection:
+            rows = connection.execute(
+                """
+                SELECT f.facture_id, f.statut, f.montant_total, f.devise,
+                       f.date_soin::text, p.score::float, p.classe, p.model_version,
+                       d.decision, f.type_facture
+                FROM app.factures AS f
+                LEFT JOIN app.predictions AS p
+                  ON p.id = (
+                    SELECT max(dernier.id) FROM app.predictions AS dernier
+                    WHERE dernier.facture_id = f.facture_id
+                  )
+                LEFT JOIN app.decisions AS d
+                  ON d.id = (
+                    SELECT max(dernier.id) FROM app.decisions AS dernier
+                    WHERE dernier.facture_id = f.facture_id
+                  )
+                ORDER BY f.facture_id DESC
+                LIMIT %s
+                """,
+                (limite,),
+            ).fetchall()
+    except psycopg.Error as exc:
+        logger.warning("liste factures erreur=%s", type(exc).__name__)
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+    return 200, {
+        "factures": [
+            {
+                "facture_id": row[0],
+                "statut": row[1],
+                "montant_total": row[2],
+                "devise": row[3],
+                "date_soin": row[4],
+                "score": row[5],
+                "classe": row[6],
+                "model_version": row[7],
+                "decision": row[8],
+                "type_facture": row[9],
+            }
+            for row in rows
+        ]
+    }
+
+
 def lister_alertes() -> tuple[int, dict]:
     try:
         with ouvrir() as connection:
             rows = connection.execute(
                 """
-                SELECT p.facture_id, p.score::float, p.model_version, p.created_at::text
+                SELECT p.facture_id, p.score::float, p.model_version, p.created_at::text,
+                       p.classe, f.statut, f.montant_total, f.devise, f.date_soin::text,
+                       f.type_facture
                 FROM app.predictions AS p
+                LEFT JOIN app.factures AS f ON f.facture_id = p.facture_id
                 WHERE p.classe = 'alerte'
                   AND p.id = (
                     SELECT max(dernier.id) FROM app.predictions AS dernier
@@ -272,7 +335,7 @@ def lister_alertes() -> tuple[int, dict]:
                     SELECT 1 FROM app.decisions AS decision
                     WHERE decision.facture_id = p.facture_id
                   )
-                ORDER BY p.id DESC
+                ORDER BY p.score DESC, p.id DESC
                 LIMIT 100
                 """
             ).fetchall()
@@ -286,6 +349,12 @@ def lister_alertes() -> tuple[int, dict]:
                 "score": row[1],
                 "model_version": row[2],
                 "created_at": row[3],
+                "classe": row[4],
+                "statut": row[5],
+                "montant_total": row[6],
+                "devise": row[7],
+                "date_soin": row[8],
+                "type_facture": row[9],
             }
             for row in rows
         ]
@@ -299,27 +368,64 @@ def lister_remboursements(principal: Principal) -> tuple[int, dict]:
         with ouvrir() as connection:
             rows = connection.execute(
                 """
-                SELECT f.facture_id, f.statut, f.montant_total, f.date_soin::text
+                SELECT f.facture_id, f.statut, f.montant_total, f.date_soin::text,
+                       f.montant_pris_en_charge, f.reste_a_charge, f.motif_rejet,
+                       f.type_facture, f.devise
                 FROM app.factures AS f
                 WHERE f.assure_id = %s
-                ORDER BY f.date_soin DESC
+                UNION ALL
+                SELECT facture_id, statut, montant_total, date_soin::text,
+                       montant_pris_en_charge, reste_a_charge, motif_rejet,
+                       type_facture, devise
+                FROM clean.factures
+                WHERE assure_id = %s
+                ORDER BY 4 DESC
                 LIMIT 100
                 """,
-                (principal.assure_id,),
+                (principal.assure_id, principal.assure_id),
             ).fetchall()
     except psycopg.Error as exc:
         logger.warning("remboursements erreur=%s", type(exc).__name__)
         return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
-    return 200, {
-        "remboursements": [
-            {
-                "facture_id": row[0],
-                "statut": row[1],
-                "montant_total": row[2],
-                "date_soin": row[3],
-            }
-            for row in rows
-        ]
+    return 200, {"remboursements": [_ligne_remboursement(row) for row in rows]}
+
+
+def lister_remboursements_tous() -> tuple[int, dict]:
+    try:
+        with ouvrir() as connection:
+            rows = connection.execute(
+                """
+                SELECT facture_id, statut, montant_total, date_soin::text,
+                       montant_pris_en_charge, reste_a_charge, motif_rejet,
+                       type_facture, devise
+                FROM app.factures AS registre
+                UNION ALL
+                SELECT facture_id, statut, montant_total, date_soin::text,
+                       montant_pris_en_charge, reste_a_charge, motif_rejet,
+                       type_facture, devise
+                FROM clean.factures
+                ORDER BY 4 DESC
+                LIMIT 200
+                -- remboursement_bureau
+                """
+            ).fetchall()
+    except psycopg.Error as exc:
+        logger.warning("remboursements bureau erreur=%s", type(exc).__name__)
+        return 503, {"code": "BASE_INDISPONIBLE", "motif": "base inaccessible"}
+    return 200, {"remboursements": [_ligne_remboursement(row) for row in rows]}
+
+
+def _ligne_remboursement(row) -> dict:
+    return {
+        "facture_id": row[0],
+        "statut": row[1],
+        "montant_total": _nombre(row[2]),
+        "date_soin": row[3],
+        "montant_pris_en_charge": None if len(row) < 5 else _nombre(row[4]),
+        "reste_a_charge": None if len(row) < 6 else _nombre(row[5]),
+        "motif_rejet": None if len(row) < 7 else row[6],
+        "type_facture": None if len(row) < 8 else row[7],
+        "devise": None if len(row) < 9 or not row[8] else row[8],
     }
 
 
@@ -673,7 +779,10 @@ def _lire_facture(connection, facture_id: str, principal: Principal) -> tuple[in
     row = connection.execute(
         """
         SELECT facture_id, statut, montant_total, devise, type_facture,
-               date_soin::text, date_facture::text, assure_id, soumis_par
+               date_soin::text, date_facture::text, assure_id, soumis_par,
+               prestataire_id, contrat_id, ordonnance_id, canal_reception,
+               mode_reglement, date_reception::text, nb_lignes,
+               montant_pris_en_charge, reste_a_charge, motif_rejet
         FROM app.factures
         WHERE facture_id = %s
         """,
@@ -681,7 +790,7 @@ def _lire_facture(connection, facture_id: str, principal: Principal) -> tuple[in
     ).fetchone()
     if row is None:
         return _lire_facture_clean(connection, facture_id, principal)
-    prestataire = row[9] if len(row) > 9 else None
+    prestataire = row[9]
     if not _visible(principal, row[7], row[8], prestataire):
         return 404, {"code": "FACTURE_INCONNUE", "motif": "facture introuvable"}
     prediction = connection.execute(
@@ -712,12 +821,56 @@ def _lire_facture(connection, facture_id: str, principal: Principal) -> tuple[in
         "type_facture": row[4],
         "date_soin": row[5],
         "date_facture": row[6],
+        "assure_id": row[7],
+        "soumis_par": row[8],
+        "prestataire_id": row[9],
+        "contrat_id": row[10],
+        "ordonnance_id": row[11],
+        "canal_reception": row[12],
+        "mode_reglement": row[13],
+        "date_reception": row[14],
+        "nb_lignes": row[15],
+        "montant_pris_en_charge": _nombre(row[16]) if len(row) > 16 else None,
+        "reste_a_charge": _nombre(row[17]) if len(row) > 17 else None,
+        "motif_rejet": row[18] if len(row) > 18 else None,
         "score": None if prediction is None else prediction[0],
         "classe": None if prediction is None else prediction[1],
         "model_version": None if prediction is None else prediction[2],
         "decision": None if decision is None else {"decision": decision[0], "motif": decision[1]},
         "anomalies_prescription": lire_anomalies(connection, facture_id),
+        "lignes": _lire_lignes_facture(connection, facture_id),
     }
+
+
+def _lire_lignes_facture(connection, facture_id: str) -> list[dict]:
+    rows = connection.execute(
+        """
+        SELECT code, type_ligne, quantite, prix_unitaire, montant
+        FROM app.lignes_facture
+        WHERE facture_id = %s
+        ORDER BY num_ligne
+        """,
+        (facture_id,),
+    ).fetchall()
+    return [
+        {
+            "code": row[0],
+            "type_ligne": row[1],
+            "quantite": _nombre(row[2]),
+            "prix_unitaire": _nombre(row[3]),
+            "montant": _nombre(row[4]),
+        }
+        for row in rows
+    ]
+
+
+def _nombre(valeur):
+    if valeur is None or isinstance(valeur, (int, float)):
+        return valeur
+    nombre = float(valeur)
+    if nombre.is_integer():
+        return int(nombre)
+    return nombre
 
 
 def _lire_facture_clean(connection, facture_id: str, principal: Principal) -> tuple[int, dict]:
@@ -741,13 +894,24 @@ def _lire_facture_clean(connection, facture_id: str, principal: Principal) -> tu
         "type_facture": row[4],
         "date_soin": row[5],
         "date_facture": row[6],
+        "assure_id": row[7],
+        "soumis_par": None,
+        "prestataire_id": row[8],
         "contrat_id": row[9],
         "ordonnance_id": row[10],
+        "canal_reception": None,
+        "mode_reglement": None,
+        "date_reception": None,
+        "nb_lignes": None,
+        "montant_pris_en_charge": None,
+        "reste_a_charge": None,
+        "motif_rejet": None,
         "score": None,
         "classe": None,
         "model_version": None,
         "decision": None,
         "anomalies_prescription": [],
+        "lignes": [],
     }
 
 

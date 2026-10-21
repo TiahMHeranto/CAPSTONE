@@ -16,6 +16,7 @@ from app.services.flux import (
     lire_reglages,
     lister_alertes,
     lister_remboursements,
+    lister_remboursements_tous,
     mesures,
     modifier_reglages,
 )
@@ -81,6 +82,14 @@ def read_reimbursements(
     principal: Annotated[Principal, Depends(exiger("assure"))],
 ) -> JSONResponse:
     status, body = lister_remboursements(principal)
+    return JSONResponse(status_code=status, content=body)
+
+
+@router.get("/remboursements")
+def read_all_reimbursements(
+    _principal: Annotated[Principal, Depends(exiger("gestionnaire", "administrateur"))],
+) -> JSONResponse:
+    status, body = lister_remboursements_tous()
     return JSONResponse(status_code=status, content=body)
 
 

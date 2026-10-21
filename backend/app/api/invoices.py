@@ -12,7 +12,13 @@ from app.core.tokens import Principal
 from app.db.session import ouvrir
 from app.schemas.facture import FactureIn
 from app.schemas.flux import DecisionIn, LotFacturesIn
-from app.services.flux import consulter_facture, decider, recevoir, recevoir_lot
+from app.services.flux import (
+    consulter_facture,
+    decider,
+    lister_factures,
+    recevoir,
+    recevoir_lot,
+)
 from app.services.ocr import (
     TAILLE_MAX,
     LectureRefusee,
@@ -177,6 +183,16 @@ def submit_batch(
     return JSONResponse(status_code=status, content=body)
 
 
+@router.get("/invoices")
+def list_invoices(
+    _principal: Annotated[
+        Principal, Depends(exiger("gestionnaire", "administrateur"))
+    ],
+) -> JSONResponse:
+    status, body = lister_factures()
+    return JSONResponse(status_code=status, content=body)
+
+
 @router.get("/invoices/{facture_id}")
 def read_invoice(
     facture_id: Annotated[str, _FACTURE],
@@ -192,7 +208,7 @@ def read_invoice(
 def decide_invoice(
     facture_id: Annotated[str, _FACTURE],
     payload: DecisionIn,
-    principal: Annotated[Principal, Depends(exiger("gestionnaire"))],
+    principal: Annotated[Principal, Depends(exiger("gestionnaire", "administrateur"))],
 ) -> JSONResponse:
     status, body = decider(facture_id, payload.decision, payload.motif, principal.identifiant)
     return JSONResponse(status_code=status, content=body)

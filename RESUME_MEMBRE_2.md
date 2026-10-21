@@ -6,7 +6,7 @@ La pile se lance avec `docker compose up`. Elle contient PostgreSQL (pgvector), 
 
 ## État actuel
 
-- Version de modèle active : `v2` (pipeline XGBoost, 23 variables). Le retour à `v1` se fait sans redémarrer l'API. Il n'y a pas de score simulé.
+- Version de modèle active : `v2` (pipeline XGBoost, 23 variables). Le membre 1 a livré une troisième fiche, `v3` (réglage maximal, seuil de rappel plus bas, même 23 variables), ajoutée au registre `models/`. Le retour à `v1` ou le passage à `v3` se fait sans redémarrer l'API. Il n'y a pas de score simulé.
 - Seuil d'alerte : lu dans `app.settings` (valeur d'exemple du cahier des charges : 0,8). Ce n'est pas le seuil de rappel de la fiche du membre 1 (environ 0,73).
 - Cohorte chargée : 84 593 factures dans `clean`, identités chiffrées (4 459 charges). Les labels ne sont pas lus par l'API.
 - Tests : 93 passent, 1 est ignoré (le score réel v2 se calcule dans le conteneur Python 3.12, pas sur le Python 3.14 de l'hôte).
@@ -22,7 +22,7 @@ La pile se lance avec `docker compose up`. Elle contient PostgreSQL (pgvector), 
 
 3. **Pseudonymisation.** L'assuré dans `clean` est un HMAC. Le coffre `identites.coffre` est chiffré. L'année de naissance est remplacée par une tranche d'âge. Ré-identification et effacement passent par une clef admin et laissent un audit sans le nom. Pièces dans `docs/02-conformite/`.
 
-4. **Modèle du membre 1.** Registre des fiches `v1` et `v2`, 23 variables. Le score attend `models/<version>/model.joblib`. Le score, la version et les contributions SHAP sont stockés. Un changement de version ne coupe pas l'API. Si la version ne peut pas scorer, la facture n'est pas enregistrée (`503`, `MODELE_INDISPONIBLE`).
+4. **Modèle du membre 1.** Registre des fiches `v1`, `v2` et `v3`, 23 variables. Le score attend `models/<version>/model.joblib`. Le score, la version et les contributions SHAP sont stockés. Un changement de version ne coupe pas l'API. Si la version ne peut pas scorer, la facture n'est pas enregistrée (`503`, `MODELE_INDISPONIBLE`).
 
 5. **Parcours API, quatre rôles.** Connexion par jeton. Prestataire : déposer une facture ou un lot. Assuré : lire ses remboursements. Gestionnaire : file d'alertes, rapport SHAP, décision (`valider`, `rejeter`, `complement`). Administrateur : seuil, canaux, version du modèle. Un mauvais rôle reçoit `403`. Contrat : `docs/05-api/`.
 

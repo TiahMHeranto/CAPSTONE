@@ -91,6 +91,14 @@ def repondre(question: str, principal: Principal) -> tuple[int, dict]:
 
 
 def embarquer(texte: str) -> list[float]:
+    try:
+        return _embarquer_google(texte)
+    except ModeleIndisponible:
+        logger.warning("embedding api indisponible, repli ollama")
+        return _embarquer_ollama(texte)
+
+
+def _embarquer_google(texte: str) -> list[float]:
     base = settings.llm_embed_base_url or settings.llm_base_url
     clef = settings.llm_embed_api_key or settings.llm_api_key
     chemin = "/models/" + urllib.parse.quote(settings.llm_embed_model, safe="") + ":embedContent"
@@ -107,6 +115,17 @@ def embarquer(texte: str) -> list[float]:
     if len(vecteur) != settings.llm_embed_dimensions:
         raise ModeleIndisponible("embedding illisible")
     return _normer([float(valeur) for valeur in vecteur])
+
+
+def _embarquer_ollama(texte: str) -> list[float]:
+    corps = _ollama(
+        "/api/embed",
+        {"model": settings.ollama_embed_model, "input": texte, "keep_alive": -1},
+    )
+    vecteurs = corps.get("embeddings") or []
+    if not vecteurs or len(vecteurs[0]) != settings.llm_embed_dimensions:
+        raise ModeleIndisponible("embedding illisible")
+    return _normer([float(valeur) for valeur in vecteurs[0]])
 
 
 def generer(
@@ -205,7 +224,62 @@ def _post(base: str, clef: str, chemin: str, charge: dict) -> dict:
         raise ModeleIndisponible("modele indisponible") from exc
 
 
+def _ollama(chemin: str, charge: dict) -> dict:
+    if not settings.ollama_url:
+        raise ModeleIndisponible("ollama absent")
+    requete = urllib.request.Request(
+        settings.ollama_url.rstrip("/") + chemin,
+        data=json.dumps(charge).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(requete, timeout=180) as reponse:
+            return json.load(reponse)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        logger.warning("ollama erreur=%s", type(exc).__name__)
+        raise ModeleIndisponible("ollama indisponible") from exc
+
+
+def _discuter_ollama(messages: list[dict], outils: list[dict] | None = None) -> dict:
+    charge: dict = {
+        "model": settings.ollama_model,
+        "stream": False,
+        "keep_alive": -1,
+        "messages": [
+            {"role": message.get("role") or "user", "content": message.get("content") or ""}
+            for message in messages
+        ],
+    }
+    if outils:
+        charge["tools"] = outils
+    corps = _ollama("/api/chat", charge)
+    message = corps.get("message") or {}
+    contenu = (message.get("content") or "").strip()
+    if not contenu and not message.get("tool_calls"):
+        raise ModeleIndisponible("reponse vide")
+    return {
+        "message": {
+            "content": contenu,
+            "tool_calls": message.get("tool_calls") or [],
+            "raisonnement": "",
+        }
+    }
+
+
 def _discuter(
+    messages: list[dict],
+    outils: list[dict] | None = None,
+    forcer_json: bool = False,
+) -> dict:
+    try:
+        return _discuter_google(messages, outils, forcer_json)
+    except ModeleIndisponible:
+        logger.warning("modele api indisponible, repli ollama")
+        return _discuter_ollama(messages, outils)
+
+
+def _discuter_google(
     messages: list[dict],
     outils: list[dict] | None = None,
     forcer_json: bool = False,

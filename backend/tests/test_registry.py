@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_fiches_sans_fuite() -> None:
     fiches = lister_fiches(ROOT / "models")
     versions = {fiche.version: fiche for fiche in fiches}
-    assert set(versions) == {"v1", "v2"}
+    assert set(versions) == {"v1", "v2", "v3"}
     for fiche in fiches:
         assert not set(fiche.colonnes) & COLONNES_INTERDITES
         assert fiche.seuil_metier < 1
@@ -22,6 +22,8 @@ def test_fiches_sans_fuite() -> None:
         assert fiche.algorithme == "xgboost"
         assert fiche.colonnes == COLONNES_V2
     assert len(versions["v2"].colonnes) == 23
+    # v3 (réglage maximal) vise un rappel plus haut avec un seuil plus bas que v1/v2.
+    assert versions["v3"].seuil_metier < versions["v2"].seuil_metier < versions["v1"].seuil_metier
 
 
 def test_sans_fichier_le_score_echoue(tmp_path: Path) -> None:

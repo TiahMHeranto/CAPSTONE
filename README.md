@@ -68,7 +68,7 @@ Un identifiant imprimé `ASS-…` est traduit en pseudonyme avant la recherche. 
 
 ## Registre des modèles
 
-`v1` et `v2` sont livrés : `models/v1/model.joblib` et `models/v2/model.joblib`. Chaque pipeline a 23 variables, dans l'ordre de sa fiche, et a été enregistré avec scikit-learn 1.9.1. Il n'y a pas de score simulé. La version active au démarrage est `v2`. Un fichier dont les colonnes diffèrent de la fiche est refusé : le dépôt répond `503` `MODELE_INDISPONIBLE` et la facture n'est pas enregistrée. Le seuil d'alerte reste celui de `app.settings`, distinct du seuil de rappel enregistré sur la fiche.
+`v1`, `v2` et `v3` sont livrés : `models/v1/model.joblib`, `models/v2/model.joblib` et `models/v3/model.joblib`. Chaque pipeline a les mêmes 23 variables, dans l'ordre de sa fiche, et a été enregistré avec scikit-learn 1.9.1. Il n'y a pas de score simulé. Seul le seuil de rappel visé à l'entraînement change : `v1` prudent (seuil ≈ 0,716), `v2` recommandé (seuil ≈ 0,543, actif au démarrage), `v3` maximal (seuil ≈ 0,146, plus de rappel, moins de précision). Un fichier dont les colonnes diffèrent de la fiche est refusé : le dépôt répond `503` `MODELE_INDISPONIBLE` et la facture n'est pas enregistrée. Le seuil d'alerte reste celui de `app.settings`, distinct du seuil de rappel enregistré sur la fiche.
 
 ## Alerte et lecture PDF
 

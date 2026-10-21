@@ -12,3 +12,5 @@ ml/data/
 .cursor/
 M1_files/
 Sujet et repartition/
+*.log
+CohorteAI_datagen/

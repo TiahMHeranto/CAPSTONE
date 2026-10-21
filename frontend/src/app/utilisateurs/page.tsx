@@ -12,7 +12,8 @@ export default async function Page() {
   return (
     <>
       <h1 className="text-3xl font-semibold">{t("admin.utilisateurs")}</h1>
-      <ul className="divide-y divide-border text-sm">
+      <CompteForm />
+      <ul className="mt-8 divide-y divide-border text-sm">
         {lignes.map((ligne) => {
           const item = ligne as Record<string, unknown>;
           const id = String(item.identifiant ?? "");
@@ -31,7 +32,6 @@ export default async function Page() {
           );
         })}
       </ul>
-      <CompteForm />
     </>
   );
 }

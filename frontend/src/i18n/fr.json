@@ -105,7 +105,31 @@
     "resultat": "Résultat du dépôt",
     "pourquoiScore": "Ce qui explique le score",
     "version": "Modèle",
-    "aucune": "Aucune facture pour ce compte."
+    "aucune": "Aucune facture pour ce compte.",
+    "liste": "Toutes les factures",
+    "listeIntro": "Statut de traitement, score et niveau d'alerte de chaque facture déposée.",
+    "statut": "Statut",
+    "niveau": "Niveau d'alerte",
+    "decision": "Décision",
+    "sansScore": "Pas encore scoré",
+    "lignes": "Lignes de la facture",
+    "aucuneLigne": "Aucune ligne enregistrée.",
+    "anomalies": "Anomalies de prescription",
+    "sansDecision": "Aucune décision",
+    "statuts": {
+      "SCOREE": "Scorée",
+      "VALIDE": "Validée",
+      "REJETE": "Rejetée",
+      "COMPLEMENT": "Complément demandé",
+      "PAYEE": "Payée",
+      "REJETEE": "Rejetée",
+      "EN_COURS": "En cours"
+    },
+    "decisions": {
+      "valider": "Validée",
+      "rejeter": "Rejetée",
+      "complement": "Complément demandé"
+    }
   },
   "alerte": {
     "titre": "File d'alertes",
@@ -117,14 +141,22 @@
     "score": "Score",
     "pourquoi": "Pourquoi cette alerte",
     "decision": "Décision",
-    "valider": "Valider l'alerte",
+    "valider": "Valider",
+    "validerQuandMeme": "Valider quand même",
+    "rejeter": "Rejeter",
     "ecarter": "Écarter",
-    "escalader": "Escalader",
+    "escalader": "Demander un complément",
+    "choixAlerte": "Cette facture a déclenché une alerte. Validez-la quand même si le dossier est conforme, ou rejetez-la.",
+    "decisionActuelle": "Dernière décision",
     "motif": "Motif",
     "motifCourt": "Le motif doit contenir au moins 10 caractères.",
     "confirmer": "Enregistrer cette décision",
     "rappel": "Cette décision est enregistrée et tracée.",
     "enregistree": "Décision enregistrée.",
+    "confirmation": "Confirmation",
+    "confirmeValider": "La facture est validée. Le remboursement est enregistré.",
+    "confirmeRejeter": "La facture est rejetée. Aucun remboursement n'est versé.",
+    "confirmeComplement": "La demande de complément est enregistrée.",
     "absente": "Cette alerte est introuvable."
   },
   "assistant": {
@@ -223,6 +255,9 @@
   "admin": {
     "seuil": "Seuil d'alerte",
     "canaux": "Canaux",
+    "canalSlack": "Slack",
+    "canalEmail": "E-mail",
+    "canalWebhook": "Webhook",
     "version": "Version active",
     "derive": "Seuil de dérive",
     "webhook": "Adresse du workflow",
@@ -240,6 +275,12 @@
     "modeles": "Versions du modèle",
     "basculer": "Activer cette version",
     "confirmerModele": "Confirmer le retour ou la bascule",
+    "modeleV1Label": "v1 — Prudent",
+    "modeleV2Label": "v2 — Recommandé",
+    "modeleV3Label": "v3 — Maximal",
+    "modeleRappel": "Fraudes repérées",
+    "modeleJustesse": "Alertes justes",
+    "modeleTauxAlerte": "Factures alertées",
     "supervision": "Supervision",
     "volume": "Volume scoré",
     "erreurs": "Erreurs",
@@ -284,7 +325,7 @@
     "CODE_INCONNU": "Un code de l'ordonnance est absent du référentiel.",
     "ASSURE_INCONNU": "Cet assuré est absent du référentiel.",
     "ACCES_REFUSE": "Cette action est réservée au professionnel de santé.",
-    "INDEXATION_EN_COURS": "Une mise à jour du corpus est déjà en cours.",
+    "DOUBLON": "Cette facture est déjà enregistrée.",
     "generique": "Cette action n'a pas abouti. Réessayez.",
     "EMAIL_PRIS": "Cette adresse e-mail est déjà utilisée.",
     "EMAIL_INVALIDE": "L'adresse e-mail n'est pas valide.",
@@ -327,6 +368,36 @@
     "confirmation": "Confirmer le mot de passe",
     "changer": "Changer le mot de passe",
     "motChange": "Mot de passe changé. La prochaine connexion utilise le nouveau."
+  },
+  "remboursements": {
+    "intro": "Vos factures, le montant pris en charge et le reste à votre charge.",
+    "introBureau": "Chaque validation calcule le remboursement selon le barème de la formule. Un rejet ne verse rien.",
+    "vide": "Aucun remboursement pour le moment.",
+    "pris": "Pris en charge",
+    "reste": "Reste à charge"
+  },
+  "motifs": {
+    "valider": {
+      "PIECES_CONFORMES": "Pièces conformes",
+      "CONTROLE_FAVORABLE": "Contrôle favorable",
+      "TARIF_CONFORME": "Tarif conforme au barème",
+      "ORDONNANCE_VALIDE": "Ordonnance valide"
+    },
+    "rejeter": {
+      "CONTROLE_MEDICAL": "Contrôle médical",
+      "PIECE_MANQUANTE_ATTESTATION": "Attestation manquante",
+      "ORDONNANCE_PERIMEE": "Ordonnance périmée",
+      "DELAI_DE_CARENCE": "Délai de carence",
+      "HORS_PERIODE_COUVERTURE": "Hors période de couverture",
+      "PLAFOND_ATTEINT": "Plafond atteint",
+      "ENTENTE_PREALABLE_ABSENTE": "Entente préalable absente",
+      "PRODUIT_NON_REMBOURSABLE": "Produit non remboursable"
+    },
+    "complement": {
+      "ORDONNANCE_MANQUANTE": "Ordonnance manquante",
+      "ATTESTATION_MANQUANTE": "Attestation à fournir",
+      "PIECE_ILLISIBLE": "Pièce illisible"
+    }
   },
   "tableau": {
     "introAssure": "Consultez vos remboursements et interrogez l'assistant sur votre contrat.",

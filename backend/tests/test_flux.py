@@ -41,6 +41,7 @@ class Memoire:
             "n8n_webhook_url": "",
         }
         self.factures = {}
+        self.lignes = []
         self.predictions = []
         self.shap = []
         self.decisions = []
@@ -81,17 +82,32 @@ class Memoire:
         if "INSERT INTO app.factures" in texte:
             self.factures[params[0]] = {
                 "facture_id": params[0],
+                "prestataire_id": params[1],
                 "assure_id": params[2],
+                "contrat_id": params[3],
                 "type_facture": params[4],
                 "date_soin": params[5],
                 "date_facture": params[6],
+                "date_reception": params[7],
+                "canal_reception": params[8],
+                "mode_reglement": params[9],
                 "devise": params[10],
+                "nb_lignes": params[11],
                 "montant_total": params[12],
                 "statut": params[13],
                 "soumis_par": params[14],
+                "ordonnance_id": params[15],
             }
             return Lignes([])
+        if "FROM app.lignes_facture" in texte:
+            lignes = [
+                (ligne[3], ligne[4], ligne[5], ligne[6], ligne[7])
+                for ligne in self.lignes
+                if ligne[1] == params[0]
+            ]
+            return Lignes(lignes)
         if "INSERT INTO app.lignes_facture" in texte:
+            self.lignes.append(params)
             return Lignes([])
         if "INSERT INTO app.predictions" in texte:
             self._id += 1
@@ -115,10 +131,76 @@ class Memoire:
             )
             return Lignes([])
         if "UPDATE app.factures" in texte:
-            self.factures[params[2]]["statut"] = params[0]
+            facture = self.factures[params[-1]]
+            facture["statut"] = params[0]
+            if len(params) >= 5:
+                facture["motif_rejet"] = params[1]
+                facture["montant_pris_en_charge"] = params[2]
+                facture["reste_a_charge"] = params[3]
             return Lignes([])
+        if "garantie_remboursement" in texte:
+            facture = self.factures.get(params[0])
+            if facture is None:
+                return Lignes([])
+            return Lignes(
+                [
+                    (
+                        facture["montant_total"],
+                        facture.get("montant_eligible"),
+                        facture["type_facture"],
+                        facture.get("assure_id"),
+                        _texte(facture["date_soin"]),
+                        80,
+                        0,
+                        None,
+                        None,
+                        "",
+                    )
+                ]
+            )
+        if "remboursement_bureau" in texte:
+            return Lignes(
+                [
+                    (
+                        facture["facture_id"],
+                        facture["statut"],
+                        facture["montant_total"],
+                        _texte(facture["date_soin"]),
+                        facture.get("montant_pris_en_charge"),
+                        facture.get("reste_a_charge"),
+                        facture.get("motif_rejet"),
+                        facture.get("type_facture"),
+                        facture.get("devise"),
+                    )
+                    for facture in self.factures.values()
+                ]
+            )
         if "SELECT 1 FROM app.factures" in texte:
             return Lignes([(1,)] if params[0] in self.factures else [])
+        if "LEFT JOIN app.predictions" in texte:
+            derniers = {}
+            for item in self.predictions:
+                derniers[item["facture_id"]] = item
+            decisions = {}
+            for item in self.decisions:
+                decisions[item["facture_id"]] = item
+            return Lignes(
+                [
+                    (
+                        facture["facture_id"],
+                        facture["statut"],
+                        facture["montant_total"],
+                        facture["devise"],
+                        _texte(facture["date_soin"]),
+                        None if derniers.get(facture["facture_id"]) is None else derniers[facture["facture_id"]]["score"],
+                        None if derniers.get(facture["facture_id"]) is None else derniers[facture["facture_id"]]["classe"],
+                        None if derniers.get(facture["facture_id"]) is None else derniers[facture["facture_id"]]["model_version"],
+                        None if decisions.get(facture["facture_id"]) is None else decisions[facture["facture_id"]]["decision"],
+                        facture["type_facture"],
+                    )
+                    for facture in sorted(self.factures.values(), key=lambda item: item["facture_id"], reverse=True)
+                ]
+            )
         if "FROM app.factures AS f" in texte:
             return Lignes(
                 [
@@ -132,6 +214,31 @@ class Memoire:
                     if facture["assure_id"] == params[0]
                 ]
             )
+        if "classe = 'alerte'" in texte:
+            closes = {item["facture_id"] for item in self.decisions}
+            derniers = {}
+            for item in self.predictions:
+                derniers[item["facture_id"]] = item
+            lignes = []
+            for item in derniers.values():
+                if item["classe"] != "alerte" or item["facture_id"] in closes:
+                    continue
+                facture = self.factures.get(item["facture_id"], {})
+                lignes.append(
+                    (
+                        item["facture_id"],
+                        item["score"],
+                        item["model_version"],
+                        "2026-10-15",
+                        item["classe"],
+                        facture.get("statut"),
+                        facture.get("montant_total"),
+                        facture.get("devise"),
+                        _texte(facture.get("date_soin")),
+                        facture.get("type_facture"),
+                    )
+                )
+            return Lignes(lignes)
         if "date_soin::text" in texte:
             facture = self.factures.get(params[0])
             if facture is None:
@@ -148,6 +255,16 @@ class Memoire:
                         _texte(facture["date_facture"]),
                         facture["assure_id"],
                         facture["soumis_par"],
+                        facture["prestataire_id"],
+                        facture["contrat_id"],
+                        facture["ordonnance_id"],
+                        facture["canal_reception"],
+                        facture["mode_reglement"],
+                        _texte(facture["date_reception"]),
+                        facture["nb_lignes"],
+                        facture.get("montant_pris_en_charge"),
+                        facture.get("reste_a_charge"),
+                        facture.get("motif_rejet"),
                     )
                 ]
             )
@@ -185,18 +302,6 @@ class Memoire:
             return Lignes([(False,)])
         if "clean.ordonnance_lignes" in texte:
             return Lignes([])
-        if "classe = 'alerte'" in texte:
-            closes = {item["facture_id"] for item in self.decisions}
-            derniers = {}
-            for item in self.predictions:
-                derniers[item["facture_id"]] = item
-            return Lignes(
-                [
-                    (item["facture_id"], item["score"], item["model_version"], "2026-10-15")
-                    for item in derniers.values()
-                    if item["classe"] == "alerte" and item["facture_id"] not in closes
-                ]
-            )
         if texte.startswith("SELECT"):
             return Lignes([])
         raise AssertionError(texte)
@@ -471,6 +576,53 @@ def test_lecture_reservee_au_deposant_puis_decision(client, monkeypatch, entete)
     suivi = client.get("/invoices/FAC-LU", headers=entete("gestionnaire"))
     assert suivi.json()["statut"] == "VALIDE"
     assert suivi.json()["decision"]["decision"] == "valider"
+    assert suivi.json()["montant_pris_en_charge"] == 15200
+    assert suivi.json()["reste_a_charge"] == 3800
+    assert suivi.json()["lignes"][0]["code"] == "CONS-GEN"
+    assert suivi.json()["lignes"][0]["montant"] == 19000
+
+
+def test_administrateur_decide_aussi(client, monkeypatch, entete) -> None:
+    _brancher(monkeypatch)
+    assert client.post("/invoices", json=_facture("FAC-ADM"), headers=entete()).status_code == 200
+    refuse = client.post(
+        "/invoices/FAC-ADM/decisions",
+        headers=entete("assure", assure_id="ASS-1"),
+        json={"decision": "valider", "motif": "pieces conformes"},
+    )
+    assert refuse.status_code == 403
+    decision = client.post(
+        "/invoices/FAC-ADM/decisions",
+        headers=entete("administrateur"),
+        json={"decision": "rejeter", "motif": "non conforme au referentiel"},
+    )
+    assert decision.status_code == 200
+    assert decision.json()["statut"] == "REJETE"
+    suivi = client.get("/invoices/FAC-ADM", headers=entete("administrateur"))
+    assert suivi.json()["decision"]["decision"] == "rejeter"
+
+
+def test_liste_complete_des_factures(client, monkeypatch, entete) -> None:
+    _brancher(monkeypatch)
+    assert client.get("/invoices", headers=entete("prestataire")).status_code == 403
+    assert client.get("/invoices", headers=entete("assure", assure_id="ASS-1")).status_code == 403
+    client.post("/invoices", json=_facture("FAC-L1", montant=19000), headers=entete())
+    client.post("/invoices", json=_facture("FAC-L2", montant=25000), headers=entete())
+    client.post(
+        "/invoices/FAC-L1/decisions",
+        headers=entete("gestionnaire"),
+        json={"decision": "valider", "motif": "pieces conformes"},
+    )
+    pour_gestionnaire = client.get("/invoices", headers=entete("gestionnaire"))
+    assert pour_gestionnaire.status_code == 200
+    lignes = {item["facture_id"]: item for item in pour_gestionnaire.json()["factures"]}
+    assert lignes["FAC-L1"]["statut"] == "VALIDE"
+    assert lignes["FAC-L1"]["decision"] == "valider"
+    assert lignes["FAC-L1"]["classe"] in {"normale", "alerte"}
+    assert lignes["FAC-L2"]["decision"] is None
+    pour_admin = client.get("/invoices", headers=entete("administrateur"))
+    assert pour_admin.status_code == 200
+    assert {item["facture_id"] for item in pour_admin.json()["factures"]} >= {"FAC-L1", "FAC-L2"}
 
 
 def test_file_alerte_puis_decision(client, monkeypatch, entete) -> None:
@@ -500,6 +652,10 @@ def test_remboursements_suivent_le_pseudonyme_du_jeton(client, monkeypatch, ente
     propre = client.get("/me/remboursements", headers=entete("assure", assure_id="ASS-1"))
     assert [item["facture_id"] for item in propre.json()["remboursements"]] == ["FAC-REM"]
     assert client.get("/me/remboursements", headers=entete("gestionnaire")).status_code == 403
+    bureau = client.get("/remboursements", headers=entete("gestionnaire"))
+    assert bureau.status_code == 200
+    assert [item["facture_id"] for item in bureau.json()["remboursements"]] == ["FAC-REM"]
+    assert client.get("/remboursements", headers=entete("assure", assure_id="ASS-1")).status_code == 403
 
 
 def test_reglages_audites(client, monkeypatch, entete) -> None:

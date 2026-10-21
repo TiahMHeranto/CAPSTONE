@@ -29,11 +29,22 @@ export type Fil = {
   maj: number;
 };
 
-const CLE = "prediccare.assistant.fils";
-const BROUILLON = "prediccare.assistant.brouillon.";
+const CLE_BASE = "prediccare.assistant.fils";
+const BROUILLON_BASE = "prediccare.assistant.brouillon";
 const SON = "prediccare.assistant.son";
 export const TITRE_NEUF = "Nouvelle conversation";
 export const LIMITE = 2000;
+
+// Les fils et brouillons sont isolés par compte : deux comptes connectés sur le
+// même navigateur n'ont jamais le même historique. `identifiant` vient du jeton
+// de session (jamais du corps d'une requête).
+function cleFils(identifiant: string): string {
+  return `${CLE_BASE}.${identifiant || "anonyme"}`;
+}
+
+function cleBrouillon(identifiant: string, id: string): string {
+  return `${BROUILLON_BASE}.${identifiant || "anonyme"}.${id}`;
+}
 
 export function identifiant(): string {
   return crypto.randomUUID();
@@ -73,9 +84,9 @@ function filValide(valeur: unknown): valeur is Fil {
   return typeof fil.id === "string" && typeof fil.titre === "string" && Array.isArray(fil.messages);
 }
 
-export function lireFils(): Fil[] {
+export function lireFils(identifiant: string): Fil[] {
   try {
-    const brut = localStorage.getItem(CLE);
+    const brut = localStorage.getItem(cleFils(identifiant));
     if (!brut) return [];
     const liste = JSON.parse(brut) as unknown;
     if (!Array.isArray(liste)) return [];
@@ -91,17 +102,18 @@ export function lireFils(): Fil[] {
   }
 }
 
-export function ecrireFils(fils: Fil[]): void {
-  localStorage.setItem(CLE, JSON.stringify(fils));
+export function ecrireFils(identifiant: string, fils: Fil[]): void {
+  localStorage.setItem(cleFils(identifiant), JSON.stringify(fils));
 }
 
-export function lireBrouillon(id: string): string {
-  return localStorage.getItem(BROUILLON + id) ?? "";
+export function lireBrouillon(identifiant: string, id: string): string {
+  return localStorage.getItem(cleBrouillon(identifiant, id)) ?? "";
 }
 
-export function ecrireBrouillon(id: string, texte: string): void {
-  if (!texte) localStorage.removeItem(BROUILLON + id);
-  else localStorage.setItem(BROUILLON + id, texte);
+export function ecrireBrouillon(identifiant: string, id: string, texte: string): void {
+  const cle = cleBrouillon(identifiant, id);
+  if (!texte) localStorage.removeItem(cle);
+  else localStorage.setItem(cle, texte);
 }
 
 export function lireSon(): boolean {

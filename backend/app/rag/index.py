@@ -14,13 +14,22 @@ logger = logging.getLogger(__name__)
 
 
 def indexer(dossier: Path) -> int:
-    fichiers = sorted(dossier.rglob("*.pdf"))
+    fichiers = sorted(chemin for chemin in dossier.rglob("*.pdf") if chemin.is_file())
+    sources = [fichier.name for fichier in fichiers]
     total = 0
     with ouvrir() as connection:
+        if sources:
+            connection.execute(
+                "DELETE FROM app.documents WHERE NOT (source = ANY(%s))",
+                (sources,),
+            )
+        else:
+            connection.execute("DELETE FROM app.documents")
         for fichier in fichiers:
             total += _fichier(connection, fichier)
+        connection.execute("DELETE FROM app.assistant_cache")
         connection.commit()
-    logger.info("corpus indexe fragments=%s", total)
+    logger.info("corpus indexe fragments=%s chemin=%s", total, dossier)
     return total
 
 

@@ -27,6 +27,8 @@ Adresse : `http://localhost:8088`.
 
 Le compte d'écran est `SUPERSET_ADMIN_USERNAME`. La source « PrediCare BI » lit le schéma `bi` avec le rôle `prediccare_bi`, en lecture seule. Le mot de passe de ce rôle est `BI_DB_PASSWORD`. La signature des sessions est `SUPERSET_SECRET_KEY`.
 
+Le tableau **Pilotage PrediCare** est créé au démarrage (`dashboard/creer_tableau.py`). Adresse : `http://localhost:8088/superset/dashboard/pilotage/`. Il reprend les indicateurs du cahier : volumes traités, montant économisé (somme des factures dont la dernière décision humaine est un rejet) et taux de détection (part des factures scorées classées en alerte). Il ajoute la répartition des scores, les alertes par statut et les décisions humaines, sans identifiant de personne.
+
 Le schéma est créé par `migrations/sql/007_bi.sql`. Il expose des agrégats et des décisions. Il n'expose pas `est_fraude`, ni le coffre d'identités, ni les noms.
 
 Les vues servent à refaire les mêmes lectures que l'écran Pilotage (volumes, alertes, décisions, distribution) pour un public qui travaille dans Superset. Elles ne sont pas une seconde source de vérité : les deux lisent la base après le score et après la décision.

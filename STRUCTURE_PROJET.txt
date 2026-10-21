@@ -46,7 +46,7 @@ predicare-tpa/
 │   │   ├── fairness/          # audit d'équité par sous-groupe
 │   │   ├── drift/             # PSI / KS
 │   │   └── inference.py       # fonction de prédiction unique appelée par l'API
-│   ├── models/                # registre : v1/, v2/ (artefact + metadata + model card)
+│   ├── models/                # registre : v1/, v2/, v3/ (artefact + metadata + model card)
 │   ├── tests/
 │   └── requirements.txt
 │
