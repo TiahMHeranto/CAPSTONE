@@ -185,9 +185,7 @@ def submit_batch(
 
 @router.get("/invoices")
 def list_invoices(
-    _principal: Annotated[
-        Principal, Depends(exiger("gestionnaire", "administrateur"))
-    ],
+    _principal: Annotated[Principal, Depends(exiger("gestionnaire", "administrateur"))],
 ) -> JSONResponse:
     status, body = lister_factures()
     return JSONResponse(status_code=status, content=body)

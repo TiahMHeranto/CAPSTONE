@@ -32,6 +32,11 @@ def _texte(valeur):
     return valeur
 
 
+def _champ(table, facture_id, cle):
+    ligne = table.get(facture_id)
+    return None if ligne is None else ligne[cle]
+
+
 class Memoire:
     def __init__(self):
         self.settings = {
@@ -184,6 +189,11 @@ class Memoire:
             decisions = {}
             for item in self.decisions:
                 decisions[item["facture_id"]] = item
+            factures = sorted(
+                self.factures.values(),
+                key=lambda item: item["facture_id"],
+                reverse=True,
+            )
             return Lignes(
                 [
                     (
@@ -192,13 +202,13 @@ class Memoire:
                         facture["montant_total"],
                         facture["devise"],
                         _texte(facture["date_soin"]),
-                        None if derniers.get(facture["facture_id"]) is None else derniers[facture["facture_id"]]["score"],
-                        None if derniers.get(facture["facture_id"]) is None else derniers[facture["facture_id"]]["classe"],
-                        None if derniers.get(facture["facture_id"]) is None else derniers[facture["facture_id"]]["model_version"],
-                        None if decisions.get(facture["facture_id"]) is None else decisions[facture["facture_id"]]["decision"],
+                        _champ(derniers, facture["facture_id"], "score"),
+                        _champ(derniers, facture["facture_id"], "classe"),
+                        _champ(derniers, facture["facture_id"], "model_version"),
+                        _champ(decisions, facture["facture_id"], "decision"),
                         facture["type_facture"],
                     )
-                    for facture in sorted(self.factures.values(), key=lambda item: item["facture_id"], reverse=True)
+                    for facture in factures
                 ]
             )
         if "FROM app.factures AS f" in texte:
@@ -655,7 +665,8 @@ def test_remboursements_suivent_le_pseudonyme_du_jeton(client, monkeypatch, ente
     bureau = client.get("/remboursements", headers=entete("gestionnaire"))
     assert bureau.status_code == 200
     assert [item["facture_id"] for item in bureau.json()["remboursements"]] == ["FAC-REM"]
-    assert client.get("/remboursements", headers=entete("assure", assure_id="ASS-1")).status_code == 403
+    refuse = client.get("/remboursements", headers=entete("assure", assure_id="ASS-1"))
+    assert refuse.status_code == 403
 
 
 def test_reglages_audites(client, monkeypatch, entete) -> None:
@@ -728,7 +739,7 @@ def test_login(client, monkeypatch) -> None:
 
         def execute(self, _requete, params=None):
             if params[0] == "prestataire":
-                return Lignes([(stocke, "prestataire", None, True)])
+                return Lignes([("prestataire", stocke, "prestataire", None, True, None)])
             return Lignes([])
 
     monkeypatch.setattr("app.db.session.psycopg.connect", lambda *_args, **_kwargs: Base())

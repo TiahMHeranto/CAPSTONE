@@ -54,8 +54,7 @@ LIBELLES = {
 }
 
 _ORD_LIGNE = re.compile(
-    r"^([A-Za-z0-9._-]{1,64})\s*[|;,]\s*(?:(?:ACTE|MEDICAMENT)\s*[|;,]\s*)?"
-    r"(\d+(?:[.,]\d+)?)\b",
+    r"^([A-Za-z0-9._-]{1,64})\s*[|;,]\s*(?:(?:ACTE|MEDICAMENT)\s*[|;,]\s*)?" r"(\d+(?:[.,]\d+)?)\b",
     re.IGNORECASE,
 )
 _LIGNE = re.compile(

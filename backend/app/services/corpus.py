@@ -103,7 +103,10 @@ def _dossier_indexe(racine: Path, ecrits: list[Path]) -> Path:
     if not relatifs:
         return racine
     premier = relatifs[0].parts[0] if len(relatifs[0].parts) > 1 else ""
-    if premier and all(len(relatif.parts) > 1 and relatif.parts[0] == premier for relatif in relatifs):
+    meme_racine = all(
+        len(relatif.parts) > 1 and relatif.parts[0] == premier for relatif in relatifs
+    )
+    if premier and meme_racine:
         return racine / premier
     return racine
 

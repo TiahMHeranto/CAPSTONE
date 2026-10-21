@@ -57,7 +57,9 @@ def montants(connection, facture_id: str, decision: str) -> tuple[int | None, in
     return appliquer(eligible, float(row[5]), _entier(row[6]), exclu, plafond)
 
 
-def _plafond_restant(connection, assure_id, categorie, date_soin, facture_id, plafond_cat, plafond_global):
+def _plafond_restant(
+    connection, assure_id, categorie, date_soin, facture_id, plafond_cat, plafond_global
+):
     if not assure_id or (plafond_cat is None and plafond_global is None):
         return None
     annee = _annee(date_soin)
